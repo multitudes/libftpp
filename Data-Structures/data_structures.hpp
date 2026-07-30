@@ -37,7 +37,8 @@ public:
   void resize(const size_t &numberOfObjectStored) {
     if (numberOfObjectStored == _maxSize) {
       // the size isn't changing, just do nothing
-      std::cout << ">>> The size isn't changing!" << std::endl;
+      std::cout << ">>> The size " << _maxSize << " isn't changing!"
+                << std::endl;
       return;
     }
     if ((_maxSize - _availableSlots.size()) > 0) {
@@ -58,6 +59,8 @@ public:
   template <typename... TArgs> Object acquire(TArgs &&...p_args) {
     if (_availableSlots.empty()) {
       std::cout << "Pool is full! Cannot acquire more objects." << std::endl;
+      // Return an empty wrapper instead of throwing
+      return Object(nullptr, nullptr);
     }
 
     size_t index = _availableSlots.back();
@@ -79,15 +82,25 @@ private:
 public:
   Object(TType *ptr = nullptr, Pool *pool = nullptr) : _ptr(ptr), _pool(pool) {}
   ~Object() {
+    std::cout << "Entering destructor" << std::endl;
     if (_ptr) {
-      _ptr->~TType();
-
       // Tell the pool this specific index is free again
       if (_pool) {
+        std::cout << "Releasing the object from the Pool" << std::endl;
+        std::cout << "Pointer" << _ptr << std::endl;
         _pool->releaseSlot(_ptr);
       }
+      std::cout << "calling the object destructor." << std::endl;
+      _ptr->~TType();
     }
   }
+  // dont allow copies just for safety!
+  Object(const Object &other) = delete;
+  Object &operator=(const Object &other) = delete;
+
+  // Allows the user to say: if (myObject) { ... }
+  // need explicit to avoid unwanted behavior see read me
+  explicit operator bool() const { return _ptr != nullptr; }
 
   TType *operator->() { return _ptr; }
 };

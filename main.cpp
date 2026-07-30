@@ -44,8 +44,12 @@ int main() {
     auto p2 = particlePool.acquire("Beta", 0.0f, 0.0f, 0.0f);
 
     // Test the overloaded -> operator
-    p1->printPosition();
-    p2->printPosition();
+    if (p1) {
+      p1->printPosition();
+    }
+    if (p2) {
+      p2->printPosition();
+    }
 
     std::cout << "\n=== 3. Objects going out of scope ===\n";
     // When this block ends, p1 and p2 are destroyed.
@@ -56,8 +60,9 @@ int main() {
   // This should instantly slot into the memory that 'Alpha' or 'Beta' just
   // vacated!
   auto p3 = particlePool.acquire("Gamma", 9.9f, 9.9f, 9.9f);
-  p3->printPosition();
-
+  if (p3) {
+    p3->printPosition();
+  }
   std::cout << "\n=== 5. End of Program ===\n";
   // p3 will be automatically destroyed as main() exits.
   return 0;

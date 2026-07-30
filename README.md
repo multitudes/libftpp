@@ -124,3 +124,46 @@ myObject.operator->()->printPosition();
 This feature is actually a strict requirement for the project. The subject explicitly dictates that your `Pool::Object` must include `- TType* operator -> (): Returns the pointer stored withing the Pool:: Object.`.
 
 This technique is exactly how standard library smart pointers (like `std::unique_ptr` and `std::shared_ptr`) work under the hood. You have essentially built your own custom smart pointer!
+
+
+### Why `explicit` is critical for `operator bool()`
+
+In C++, compilers love to automatically convert types (called **implicit conversion**) to try and make your code compile.
+
+If you just write `operator bool() const` without the `explicit` keyword, your object can be secretly treated as a `bool` (which is essentially a `0` or `1`) anywhere in your program.
+
+Here is the nightmare scenario of what happens **without** `explicit`:
+
+```cpp
+auto myObject = particlePool.acquire("Alpha", 1, 2, 3);
+
+// This is perfectly valid C++ without 'explicit'.
+// myObject evaluates to 'true' (1), so mathResult becomes 101.
+int mathResult = myObject + 100; 
+
+// Or if a function expects an integer, you could accidentally pass the object!
+someFunctionExpectingInt(myObject); 
+
+```
+
+The compiler won't warn you; it will just silently convert your custom `Pool::Object` into a `1` and continue running, creating a massive logical bug.
+
+### What `explicit` fixes
+
+By adding `explicit`:
+
+```cpp
+explicit operator bool() const { return _ptr != nullptr; }
+
+```
+
+You are telling the compiler: *"You are only allowed to convert this to a boolean in strict, explicit boolean contexts."*
+
+With `explicit`, the bad math code (`myObject + 100`) will immediately throw a compile-time error. But it will still perfectly allow the safe, logical checks you actually want:
+
+```cpp
+if (myObject) { ... }           // Allowed!
+while (myObject) { ... }        // Allowed!
+if (!myObject || otherThing)    // Allowed!
+
+```
