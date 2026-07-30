@@ -57,4 +57,8 @@ fclean: clean
 
 re: fclean all
 
+test: 
+	c++ -Wall -Wextra -Werror -std=c++11 main.cpp -o test_pool
+	./test_pool
+
 .PHONY: all clean fclean re
