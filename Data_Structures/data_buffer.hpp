@@ -1,8 +1,9 @@
 #pragma once
-#include <cstddef>
-#include <cstring>
 #ifndef DATA_BUFFER_HPP
 #define DATA_BUFFER_HPP
+
+#include <cstddef>
+#include <cstring>
 
 #include <iostream>
 #include <vector>

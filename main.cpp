@@ -26,6 +26,30 @@ public:
 };
 
 // =============================================================================
+// Dummy Class to test our Memento
+// =============================================================================
+
+class Player : public Memento {
+private:
+  // 1. The explicit invite! This grants Memento access to the private methods
+  // below.
+  friend class Memento;
+
+  // 2. The private data
+  int _health;
+  float _x, _y;
+
+  // 3. The private implementations of the virtual contract
+  void _saveToSnapshot(Memento::Snapshot &snapshot) const override {
+    snapshot << _health << _x << _y;
+  }
+
+  void _loadFromSnapshot(Memento::Snapshot &snapshot) override {
+    snapshot >> _health >> _x >> _y;
+  }
+};
+
+// =============================================================================
 // Main Test
 // =============================================================================
 int main() {
