@@ -31,15 +31,15 @@ public:
 
 class Player : public Memento {
 private:
-  // 1. The explicit invite! This grants Memento access to the private methods
-  // below.
+  // 1. Granting Memento the VIP pass
   friend class Memento;
 
-  // 2. The private data
+  // 2. The private state data
   int _health;
-  float _x, _y;
+  float _x;
+  float _y;
 
-  // 3. The private implementations of the virtual contract
+  // 3. Implementing the virtual contract
   void _saveToSnapshot(Memento::Snapshot &snapshot) const override {
     snapshot << _health << _x << _y;
   }
@@ -47,12 +47,37 @@ private:
   void _loadFromSnapshot(Memento::Snapshot &snapshot) override {
     snapshot >> _health >> _x >> _y;
   }
+
+public:
+  // Constructor
+  Player(int hp, float startX, float startY)
+      : _health(hp), _x(startX), _y(startY) {}
+
+  // Methods to alter the state
+  void takeDamage(int amount) {
+    _health -= amount;
+    if (_health < 0)
+      _health = 0;
+  }
+
+  void move(float dx, float dy) {
+    _x += dx;
+    _y += dy;
+  }
+
+  // Helper to see what is happening
+  void printStatus() const {
+    std::cout << "  -> Health: " << _health << " | Position: (" << _x << ", "
+              << _y << ")\n";
+  }
 };
 
 // =============================================================================
 // Main Test
 // =============================================================================
 int main() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============ POOL ==============\n";
   std::cout << "=== 1. Initializing Pool ===\n";
   // We use our parameterized constructor to allocate space for 3 Particles
   Pool<Particle> particlePool(3);
@@ -90,8 +115,8 @@ int main() {
   std::cout << "\n=== 5. End of Program ===\n";
   // p3 will be automatically destroyed as main() exits.
 
-  // -----------------------------------------------------
-
+  std::cout << "\n\n================================\n";
+  std::cout << "============ DATABUFFER ===========\n";
   std::cout << "=== 1. Creating DataBuffer ===\n";
   DataBuffer buffer;
 
@@ -133,5 +158,41 @@ int main() {
   // This should safely fail and print your warning!
   buffer >> extraData;
 
+  // --------------------- Memento ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Memento ===========\n";
+  std::cout << "=== 1. Starting New Game ===\n";
+  Player myPlayer(100, 10.0f, 20.0f);
+  myPlayer.printStatus();
+
+  std::cout << "\n=== 2. Hitting a Checkpoint (Saving) ===\n";
+  // We call the public save() method inherited from Memento
+  Memento::Snapshot saveSlot1 = myPlayer.save();
+
+  // int (4) + float (4) + float (4) = 12 bytes!
+  std::cout << "Game saved successfully! Snapshot size: " << saveSlot1.size()
+            << " bytes.\n";
+
+  std::cout << "\n=== 3. Disaster Strikes! ===\n";
+  std::cout << "Player falls into a trap and takes 80 damage...\n";
+  myPlayer.takeDamage(80);
+  myPlayer.move(5.5f, -15.0f);
+  myPlayer.printStatus();
+
+  std::cout << "\n=== 4. Reloading Checkpoint ===\n";
+  std::cout << "Loading saveSlot1...\n";
+  // We call the public load() method, which safely reads our copy
+  myPlayer.load(saveSlot1);
+  myPlayer.printStatus();
+
+  std::cout << "\n=== 5. Verifying Snapshot Integrity ===\n";
+  std::cout << "Did the snapshot survive the load? Let's load it AGAIN!\n";
+  myPlayer.takeDamage(99);  // Mess up the state again
+  myPlayer.load(saveSlot1); // Load the exact same snapshot a second time
+  myPlayer.printStatus();
+  std::cout << "Success! The snapshot is perfectly intact.\n";
+
+  std::cout << "\n\n================================\n";
+  std::cout << "============ ENDING ===========\n";
   return 0;
 }

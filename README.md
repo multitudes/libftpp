@@ -317,3 +317,64 @@ Your libftpp.hpp file is what C++ developers call an Umbrella Header. It acts li
 
 When you use DataBuffer in main.cpp, clangd looks at your code and says:
 "Wait a minute... DataBuffer actually lives in data_buffer.hpp. You included libftpp.hpp, but you aren't using anything defined directly inside it! You should include data_buffer.hpp instead."
+
+## Memento
+
+It is a design pattern of the gang of four. Allows to take snapshots of an object. 
+The class Memento offers as public method the same and load function which will use a DataBuffer as a Snapshot- we already implemented a databuffer! so we gonna use it 
+```cpp
+using Snapshot = DataBuffer;
+```
+
+The full class also will be virtual. Nered a virtual destructor and also the methods (private) to be implemented in the children class also made virtual.
+
+```cpp
+#pragma once
+
+#include "data_buffer.hpp"
+
+class Memento {
+public:
+    // 1. The type alias we just talked about!
+    using Snapshot = DataBuffer;
+
+    // 2. Virtual destructor is mandatory for classes meant to be inherited!
+    virtual ~Memento() = default;
+
+    // 3. The public interface for the user
+    Snapshot save() const; 
+    void load(const Snapshot& state);
+
+private:
+    // 4. The "Pure Virtual" methods. 
+    // The '= 0' means Memento has no code for these; the child MUST provide it.
+    virtual void _saveToSnapshot(Snapshot& snapshot) const = 0;
+    virtual void _loadFromSnapshot(Snapshot& snapshot) = 0;
+};
+```
+think about how the parent Memento class actually executes the saving. When you call save(), Memento needs to turn around and call _saveToSnapshot() on the child class.
+
+Since Memento doesn't know what child class is inheriting from it (it could be a Player, a Particle, or a Car), what C++ keyword do we need to attach to those private _saveToSnapshot and _loadFromSnapshot methods so that the parent can trigger the child's specific version of them?
+
+the 42 subject explicitly dropped the hint ("I wonder if there is a friendly way to do it...")When you (or anyone else) write a class that inherits Memento, it must look like this:
+
+```cpp
+class Player : public Memento {
+private:
+    // 1. The explicit invite! This grants Memento access to the private methods below.
+    friend class Memento; 
+
+    // 2. The private data
+    int _health;
+    float _x, _y;
+
+    // 3. The private implementations of the virtual contract
+    void _saveToSnapshot(Memento::Snapshot& snapshot) const override {
+        snapshot << _health << _x << _y;
+    }
+
+    void _loadFromSnapshot(Memento::Snapshot& snapshot) override {
+        snapshot >> _health >> _x >> _y;
+    }
+};
+```
