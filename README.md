@@ -411,3 +411,68 @@ That is where your Observer class (from the subject) comes in. It acts as the me
 Subscribing: Before the game even starts, the UI, Audio, and Network go to the megaphone and say: "Hey, if you ever hear someone yell 'Player Leveled Up', please tap me on the shoulder and run my specific code."
 Notifying: When the player levels up, it just tells the megaphone. The megaphone then looks at its clipboard, sees UI, Audio, and Network on the list for that event, and taps all three of them on the shoulder.
 Now, the Player doesn't know the UI or Audio even exist! It just yells into the megaphone and trusts that whoever cares is listening.
+A dictionary (in C++, a `std::map` or `std::unordered_map`) where the key is the `TEvent` and the value is a `std::vector` of lambdas is exactly the perfect way to build this.
+
+### Who is Who?
+
+To keep it straight, always think of it in two phases: **Setup (Subscribing)** and **Action (Notifying)**.
+
+* **The Megaphone (The Observer class):** Just a middleman. It holds that dictionary you just described.
+* **The Subscribers (UI, Audio, Network):** These are the systems that care about the event. They add their lambdas to the dictionary during the setup phase.
+* **The Broadcaster (The Player):** This is the object where the action actually happens. It doesn't know who is in the dictionary; it just tells the megaphone to trigger it.
+
+### The "Level Up" Example (Done Right)
+
+Let's look at exactly how your UI, Audio, and Network subscribe to the same event, and how the player triggers all three without ever talking to them directly.
+
+```cpp
+// 1. We define our event label
+enum GameEvent {
+    PLAYER_LEVEL_UP
+};
+
+// We have our central observer (The Megaphone)
+Observer<GameEvent> globalObserver; 
+
+// =========================================================================
+// PHASE 1: SETUP (The Subscribers register themselves)
+// =========================================================================
+
+// The UI System subscribes its own lambda to the Level Up event
+globalObserver.subscribe(PLAYER_LEVEL_UP, []() {
+    std::cout << "[UI System] Flashing 'LEVEL UP!' on screen.\n";
+});
+
+// The Audio System subscribes its own lambda to the EXACT SAME event
+globalObserver.subscribe(PLAYER_LEVEL_UP, []() {
+    std::cout << "[Audio System] Playing fanfare.wav loudly.\n";
+});
+
+// The Network System subscribes its own lambda
+globalObserver.subscribe(PLAYER_LEVEL_UP, []() {
+    std::cout << "[Network System] Saving new level to the cloud.\n";
+});
+
+// At this point, the dictionary inside globalObserver looks like this:
+// PLAYER_LEVEL_UP -> [ UI_Lambda, Audio_Lambda, Network_Lambda ]
+
+
+// =========================================================================
+// PHASE 2: ACTION (The Broadcaster triggers the event)
+// =========================================================================
+class Player {
+public:
+    void levelUp() {
+        // ... player level increases ...
+        
+        // The Player just yells into the megaphone. 
+        // It has NO IDEA that UI, Audio, and Network are listening.
+        globalObserver.notify(PLAYER_LEVEL_UP);
+    }
+};
+
+```
+
+When `myPlayer.levelUp()` calls that `notify` function, the `Observer` will look up `PLAYER_LEVEL_UP` in its dictionary, find the array of 3 lambdas, and execute them one by one. The UI flashes, the audio plays, and the network saves, all from one single trigger!
+
+Does mapping it out this way make the distinct roles of the systems clearer? And since you perfectly guessed the dictionary structure, are you ready to write the actual `observer.hpp` class using `std::map` and `std::vector`?
