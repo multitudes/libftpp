@@ -1,4 +1,4 @@
-#include "libftpp.hpp" // Assuming you saved your code here
+#include "libftpp.hpp"
 #include <iostream>
 #include <string>
 
@@ -65,5 +65,49 @@ int main() {
   }
   std::cout << "\n=== 5. End of Program ===\n";
   // p3 will be automatically destroyed as main() exits.
+
+  // -----------------------------------------------------
+
+  std::cout << "=== 1. Creating DataBuffer ===\n";
+  DataBuffer buffer;
+
+  // The data we want to save/send
+  int playerHealth = 100;
+  float playerX = 45.5f;
+  bool isPoisoned = true;
+
+  std::cout << "Writing to buffer:\n";
+  std::cout << "  Health : " << playerHealth << "\n";
+  std::cout << "  X Pos  : " << playerX << "\n";
+  std::cout << "  Poison : " << (isPoisoned ? "true" : "false") << "\n\n";
+
+  std::cout << "=== 2. Serializing (Writing) ===\n";
+  // Chain the writes together!
+  buffer << playerHealth << playerX << isPoisoned;
+
+  // Let's see how big the cassette tape is:
+  // int (4) + float (4) + bool (1) = 9 bytes
+  std::cout << "Buffer size is now: " << buffer.size() << " bytes.\n\n";
+
+  std::cout << "=== 3. Deserializing (Reading) ===\n";
+  // Completely empty variables to prove we are reading from the buffer
+  int outHealth = 0;
+  float outX = 0.0f;
+  bool outPoisoned = false;
+
+  // We MUST read in the exact same order: int -> float -> bool
+  buffer >> outHealth >> outX >> outPoisoned;
+
+  std::cout << "Read from buffer:\n";
+  std::cout << "  Health : " << outHealth << "\n";
+  std::cout << "  X Pos  : " << outX << "\n";
+  std::cout << "  Poison : " << (outPoisoned ? "true" : "false") << "\n\n";
+
+  std::cout << "=== 4. Safety Check ===\n";
+  int extraData;
+  std::cout << "Attempting to read past the end of the buffer...\n";
+  // This should safely fail and print your warning!
+  buffer >> extraData;
+
   return 0;
 }

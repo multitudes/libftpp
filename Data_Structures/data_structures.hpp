@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -95,8 +94,8 @@ public:
     }
   }
   // dont allow copies just for safety!
-  Object(const Object &other) = delete;
-  Object &operator=(const Object &other) = delete;
+  // Object(const Object &other) = delete;
+  // Object &operator=(const Object &other) = delete;
 
   // Allows the user to say: if (myObject) { ... }
   // need explicit to avoid unwanted behavior see read me

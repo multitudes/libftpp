@@ -23,7 +23,7 @@ ARFLAGS     = rcs
 
 # As you create your modules in their folders, add the .cpp files here.
 # Example: SRCS = data_structures/data_buffer.cpp design_patterns/memento.cpp
-SRCS        = 
+SRCS        =  data_structures/data_buffer.cpp
 
 OBJS        = $(SRCS:.cpp=.o)
 
@@ -57,8 +57,12 @@ fclean: clean
 
 re: fclean all
 
-test: 
-	c++ -Wall -Wextra -Werror -std=c++11 main.cpp -o test_pool
+test: all
+	@echo "=================="
+	@echo "Compiling test executable using $(NAME)..."
+	$(CXX) $(CXXFLAGS) main.cpp $(NAME) -o test_pool
+	@echo "Running test_pool..."
+	@echo "=================="
 	./test_pool
 
 .PHONY: all clean fclean re

@@ -2,7 +2,7 @@
 #ifndef LIBFTPP_HPP
 #define LIBFTPP_HPP
 
-#include "Data-Structures/data_buffer.hpp"
-#include "Data-Structures/data_structures.hpp"
+#include "Data_Structures/data_buffer.hpp"     // IWYU pragma: export
+#include "Data_Structures/data_structures.hpp" // IWYU pragma: export
 
 #endif
