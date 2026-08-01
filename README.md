@@ -728,3 +728,49 @@ The hint says: *"This class must be declared as a friend in the inherited class"
 
 To physically stop a programmer from typing `AudioEngine engine2;` and ruining our game, we have to make the constructor of `AudioEngine` **private**. If the constructor is private, no one can build it!
 But wait... if it's private, how does our `Singleton::instantiate()` method build it? Just like we did in the Memento pattern, the child class must explicitly invite the `Singleton` inside using `friend class Singleton<TType>;`.
+
+
+## The Finite State Machine
+
+This is a fantastic pattern to tackle next! The Finite State Machine (often just called an FSM) is arguably the absolute backbone of video game AI and logic.
+
+Looking at the requirements in **image_b20838.jpg**, we are building a templated `StateMachine` that completely controls the behavior of an object based on what "state" it is currently in.
+
+### The Concept: The Enemy Brain
+
+To understand what this class does, imagine you are coding an Enemy NPC in a game. The enemy usually has three modes (states):
+
+1. **Idle:** Standing still, doing nothing.
+2. **Chase:** Running toward the player.
+3. **Attack:** Swinging a sword at the player.
+
+Instead of writing a massive, messy `if/else` block in your game loop (`if enemy is close, chase; if enemy is very close, attack`), a State Machine isolates these behaviors. An enemy is only ever in exactly *one* state at a time, and it only runs the code specific to that state.
+
+---
+
+### Decoding the Methods
+
+Let's translate the methods from your subject image into how they apply to our Enemy NPC:
+
+* **`addState(const TState& state)`**
+This is where you register the vocabulary of your machine. You are telling it: *"Hey, IDLE, CHASE, and ATTACK are the only legal states that exist."*
+* **`addAction(const TState& state, const std::function<void()>& lambda)`**
+This defines what the machine does *while* it is in a state. For example, you map the `CHASE` state to a lambda that contains the pathfinding logic.
+* **`update()`**
+This is called every single frame of your game. It checks the *current* state, finds the lambda you registered with `addAction`, and executes it. (The hint explicitly says: if there is no action registered for the current state, **throw an exception!**)
+* **`addTransition(const TState& startState, const TState& finalState, const std::function<void()>& lambda)`**
+This is for the *in-between* moments. When an enemy goes from `IDLE` to `CHASE`, you might want them to play an "Aggro Roar" sound. You register a lambda specifically for the `(IDLE -> CHASE)` transition.
+* **`transitionTo(const TState& state)`**
+This triggers the state change. If the enemy is in `IDLE`, and you call `transitionTo(CHASE)`, the machine looks for the transition lambda, executes the "Aggro Roar," and then changes the current internal state to `CHASE`. (Again, the hint says: if this transition isn't set up, **throw an exception!**)
+
+---
+
+### The Architecture Challenge
+
+Because this is templated (`template <typename TState>`), all of this will go into `state_machine.hpp`.
+
+To make this work, we need to figure out how to internally store all these registered states, actions, and transitions. We know from the Observer pattern that a dictionary (`std::map`) is perfect for mapping a single `TState` to an action lambda.
+
+However, mapping the *transitions* is a bit trickier because a transition is defined by **two** states (the `startState` and the `finalState`).
+
+How do you think we could combine two `TState` values into a single key so we can store our transition lambdas in a C++ `std::map`?

@@ -1,3 +1,4 @@
+#include "design_patterns/singleton.hpp"
 #include "libftpp.hpp"
 #include <iostream>
 #include <string>
@@ -75,7 +76,6 @@ public:
 // =========================================================================
 // 1. The Custom Event Struct
 // =========================================================================
-
 struct PlayerEvent {
   int eventType; // used like enum
   std::string playerName;
@@ -86,6 +86,27 @@ struct PlayerEvent {
       return eventType < other.eventType;
     }
     return playerName < other.playerName;
+  }
+};
+
+// =========================================================================
+// The Class we want to turn into a Singleton
+// =========================================================================
+class GameManager {
+private:
+  friend class Singleton<GameManager>;
+  int _currentLevel;
+  std::string _difficulty;
+  // private constructor
+  GameManager(int startLevel, std::string difficulty)
+      : _currentLevel(startLevel), _difficulty(difficulty) {
+    std::cout << "[GameManager] Initialized at Level " << _currentLevel
+              << " on " << _difficulty << " difficulty.\n";
+  }
+
+public:
+  void play() {
+    std::cout << "--> Playing game at level " << _currentLevel << "...\n";
   }
 };
 
@@ -257,6 +278,37 @@ int main() {
   // and our find() method safely ignores it without crashing.
 
   std::cout << "\nAll events processed successfully.\n";
+
+  std::cout << "\n\n================================\n";
+  std::cout << "============ SINGLETON ===========\n";
+  std::cout << "=== 1. Initializing the Singleton ===\n";
+
+  // We pass the arguments (int, std::string) perfectly to the private
+  // constructor using the variadic template!
+  Singleton<GameManager>::instantiate(1, "Hardcore");
+
+  std::cout << "\n=== 2. Accessing the Instance ===\n";
+
+  // We grab the global pointer to our one and only GameManager
+  GameManager *myGame = Singleton<GameManager>::instance();
+  if (myGame != nullptr) {
+    myGame->play();
+  }
+
+  std::cout << "\n=== 3. Trying to break the Singleton Rule ===\n";
+
+  try {
+    std::cout << "Attempting to instantiate a second GameManager...\n";
+    // This should trigger our exception!
+    Singleton<GameManager>::instantiate(5, "Easy");
+  } catch (const std::exception &e) {
+    std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
+  }
+
+  // (Optional) Standard compiler check:
+  // Uncommenting the line below will cause a COMPILER ERROR because the
+  // constructor is private!
+  // GameManager illegalManager(10, "Normal");
 
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";
