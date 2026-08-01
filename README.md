@@ -695,3 +695,36 @@ Because `std::map` only ever navigates by asking *"Are you smaller?"*, the only 
 
 This is why `std::map` is usually the go-to choice for custom struct keys—it saves you from writing all that extra math.
 
+## Singleton
+
+This is it, the final boss! The Singleton pattern is incredibly famous (and sometimes infamous) in game development and software engineering.
+
+Let's break down the requirements from **image_b3daad.png** piece by piece.
+
+### The Core Concept: The "Highlander" Rule
+
+The description says: *"Ensures that a templated TType class has only one instance..."*
+
+Think of a Singleton like the Highlander: **There can be only one.**
+In a game, you might have hundreds of `Player` objects or `Particle` objects, but you only ever have **one** `AudioEngine` or **one** `GameManager`. If you accidentally created a second `AudioEngine`, your game would try to play music twice at the same time, causing a horrible echoing mess! The Singleton pattern physically prevents anyone from creating a second instance.
+
+### Decoding the Methods
+
+This subject is asking you to write a generic template (`singleton.hpp`) that can turn *any* class into a Singleton.
+
+**1. `TType* instance()**`
+Since we are only allowed to have one instance of our class, we need a global way to get our hands on it. This function acts as the global access point. Whenever you need the audio engine, you just call `Singleton<AudioEngine>::instance()`, and it hands you the pointer to the one true engine.
+
+**2. `template<typename ... TArgs> void instantiate(TArgs&& p_args)**`
+This looks scary, but it's just modern C++ magic.
+
+* The `... TArgs` is called a **Variadic Template**. It just means "accept absolutely any number of arguments, of any type."
+* Why do we need this? Because `Singleton` doesn't know what `TType` is. If `TType` is a `Database`, its constructor might need a `(std::string username, std::string password)`. If it's a `GameManager`, it might need an `(int startingLevel)`. This variadic template catches whatever arguments the user provides and passes them perfectly into the `TType` constructor.
+* **The Trapdoor:** The subject specifies that if `instantiate` is called a second time, it **must throw an exception**. This is how we enforce the "only one" rule!
+
+### The Hint: The Friend Keyword (Again!)
+
+The hint says: *"This class must be declared as a friend in the inherited class"*
+
+To physically stop a programmer from typing `AudioEngine engine2;` and ruining our game, we have to make the constructor of `AudioEngine` **private**. If the constructor is private, no one can build it!
+But wait... if it's private, how does our `Singleton::instantiate()` method build it? Just like we did in the Memento pattern, the child class must explicitly invite the `Singleton` inside using `friend class Singleton<TType>;`.
