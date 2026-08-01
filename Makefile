@@ -47,6 +47,7 @@ clean:
 	@echo "=================="
 	@echo "Cleaning object files..."
 	rm -f $(OBJS)
+	rm -f test_pool
 	@find . -name "*.dSYM" -delete -print
 	@find . -name "*~" -delete -print
 

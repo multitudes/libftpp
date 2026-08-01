@@ -476,3 +476,222 @@ public:
 When `myPlayer.levelUp()` calls that `notify` function, the `Observer` will look up `PLAYER_LEVEL_UP` in its dictionary, find the array of 3 lambdas, and execute them one by one. The UI flashes, the audio plays, and the network saves, all from one single trigger!
 
 Does mapping it out this way make the distinct roles of the systems clearer? And since you perfectly guessed the dictionary structure, are you ready to write the actual `observer.hpp` class using `std::map` and `std::vector`?
+
+
+## Question about find in maps
+
+this one auto it = _subscribers.find(event) could be just auto it = _subscribers[event] ? or it is unsafe?
+
+You are right that `_subscribers[event]` looks much cleaner and shorter! But in this specific case, **it is dangerous and creates a hidden memory leak.**
+
+Here is exactly what happens behind the scenes with C++ dictionaries (`std::map`).
+
+### The Secret Trap of `operator[]`
+
+In C++, the square brackets `[]` on a map do not just *read* data. They are designed to guarantee that you get a valid item back.
+
+If you write `_subscribers[event]`, the map looks for the event. If the event **does not exist**, the map quietly says: *"Oh, you wanted this event? Let me create it for you right now!"* It will instantly insert a brand new, empty `std::vector` into the dictionary and return that to you.
+
+### Why this destroys a game loop
+
+Imagine you have an enemy that calls `events.notify(PLAYER_FOOTSTEP)` every single frame to check if it should chase the player. But let's say nothing has actually subscribed to that event yet.
+
+* **If you use `find()`:** The map looks, says "not found," and does nothing. Zero cost.
+* **If you use `[]`:** Every single frame, the map tries to find `PLAYER_FOOTSTEP`. When it doesn't find it, it creates a new empty array. The next frame, an enemy triggers `BIRD_CHIRP`. The map creates another empty array.
+
+Over a few minutes, your dictionary will be filled with hundreds of useless, empty arrays taking up RAM, just because someone *checked* to see if they existed!
+
+### The `const` Connection
+
+Remember our very first conversation about `const` correctness?
+
+Because `[]` is capable of modifying the map (by inserting new items), the C++ compiler strictly forbids you from using `[]` inside any function marked `const`.
+
+If you wanted to make your `notify` method perfectly secure (since notifying shouldn't change the list of subscribers), you would write it like this:
+
+```cpp
+// The 'const' here promises we won't change the dictionary
+void notify(const TEvent& event) const { 
+    // This works perfectly because find() just looks.
+    auto it = _subscribers.find(event); 
+    
+    // If you typed _subscribers[event] here, the compiler would 
+    // instantly throw an error to protect your map!
+    
+    if (it != _subscribers.end()) {
+        for (const auto& lambda : it->second) {
+            lambda();
+        }
+    }
+}
+
+```
+
+By using `find()`, you are writing high-performance, defensively protected C++!
+
+
+ou are exactly right! You have perfectly decoded how C++ iterators work with dictionaries.
+
+Here is the exact breakdown of what is happening under the hood in that specific line of code.
+
+The std::pair (First and Second)
+When you store something in a std::map, C++ doesn't just throw the key and the value loosely into memory. It physically binds them together into a single object called a std::pair.
+
+When your find() function succeeds, it returns an iterator (the it variable) that points directly to that pair.
+it->first represents the Key (your TEvent, like LEVEL_UP).
+it->second represents the Value (your std::vector of lambdas).
+Deconstructing the Loop
+The syntax for (const auto &lambda : it->second) is called a range-based for loop (introduced in C++11), and it is the cleanest way to loop through arrays.
+
+Here is what each piece of that line is doing:
+it->second: This is the array (the std::vector) of lambdas that we want to loop through.
+auto: This tells the compiler, "You already know it->second holds std::function<void()> objects, so I'm not going to type all of that out. You figure it out."
+& (Reference): This ensures we are looking at the original lambda in the array, rather than making a slow copy of it just for the loop.
+const: This is our safety lock. It guarantees we won't accidentally overwrite or destroy the lambda while we are trying to execute it.  
+
+## event as structs?
+Yes, absolutely! This is actually a highly advanced and common way to use the Observer pattern in professional game engines. It is often referred to as using **Event Objects**.
+
+Because your `Observer` is templated (`template <typename TEvent>`), C++ doesn't care if `TEvent` is an `int`, an `enum`, a `std::string`, or a custom `struct`. It will accept anything!
+
+However, there is **one major catch** you must handle if you use a `struct` because of how `std::map` works.
+
+### The `std::map` Sorting Rule
+
+A `std::map` is a *sorted* dictionary. It organizes its keys internally like a phone book so it can find things instantly.
+
+* If your key is an `int`, C++ knows that `1` comes before `2`.
+* If your key is a `std::string`, C++ knows to sort it alphabetically.
+* But if your key is a custom `struct`, **C++ has no idea how to sort it.**
+
+If you try to use a plain `struct` as a `TEvent`, the compiler will throw a massive error. You have to teach C++ how to sort your struct by adding an `operator<` (less-than operator).
+
+### How to do it in code
+
+Here is exactly how you would define your struct so that it works perfectly inside your `Observer` dictionary:
+
+```cpp
+#include <string>
+
+// 1. Define the Struct
+struct PlayerEvent {
+    int eventType;           // e.g., 1 for LevelUp, 2 for Death
+    std::string playerName;  // e.g., "Alice"
+
+    // 2. The Magic Overload required by std::map
+    // This tells C++ how to sort these events in the dictionary
+    bool operator<(const PlayerEvent& other) const {
+        // First, sort by the event type (e.g., Level Ups group together)
+        if (eventType != other.eventType) {
+            return eventType < other.eventType;
+        }
+        // If it's the SAME event type, sort alphabetically by player name
+        return playerName < other.playerName;
+    }
+};
+
+```
+
+### Why this is incredibly powerful
+
+If you use this struct as your `TEvent`, you can create hyper-specific subscriptions.
+
+Instead of subscribing to a generic "Level Up", a subscriber can say: *"I only want to be notified if a Level Up happens AND the player's name is Alice."*
+
+```cpp
+Observer<PlayerEvent> globalObserver;
+
+// Create a specific event to listen for
+PlayerEvent targetEvent = {1, "Alice"};
+
+// Subscribe only to Alice's level ups!
+globalObserver.subscribe(targetEvent, []() {
+    std::cout << "Ding! Alice specifically leveled up!\n";
+});
+
+// Triggering the event:
+PlayerEvent currentEvent = {1, "Alice"};
+globalObserver.notify(currentEvent); // This works and triggers the lambda!
+
+PlayerEvent otherEvent = {1, "Bob"};
+globalObserver.notify(otherEvent);   // This does nothing, because no one subscribed to Bob!
+
+```
+
+This perfectly bypasses the problem of needing multiple "megaphones" because the megaphone's dictionary is now smart enough to separate events by player name!
+
+## but then I could use a unsorted map.. 
+You are absolutely right to think of that! In C++, the "unsorted map" is called `std::unordered_map`. Because it doesn't sort the keys, it is technically faster (it has O(1) instant lookups, whereas `std::map` takes a little longer at O(log N)).
+
+However, using `std::unordered_map` with a custom struct actually forces you to write **more** code, not less!
+
+Here is why you can't just drop a custom struct into an unordered map for free.
+
+### The Hash Table Trap
+
+`std::unordered_map` is built on a Hash Table. It works by taking your key, doing some math on it (hashing it), and turning it into a giant random number to use as an index.
+
+C++ knows how to hash an `int` or a `std::string`. But if you hand it a custom `PlayerEvent` struct, the compiler has no idea how to do math on it.
+
+To use a `std::unordered_map` with your struct, you have to provide **two** things instead of just one:
+
+1. An `operator==` so the map knows if two events are exactly identical.
+2. A custom Hash Function to teach C++ how to turn your struct into a number.
+
+### What the code looks like
+
+If you wanted to use `std::unordered_map`, here is the extra boilerplate you would be forced to write:
+
+```cpp
+#include <string>
+#include <unordered_map>
+#include <functional> // Needed for std::hash
+
+// 1. The Struct
+struct PlayerEvent {
+    int eventType;
+    std::string playerName;
+
+    // Requirement A: Equality operator
+    bool operator==(const PlayerEvent& other) const {
+        return (eventType == other.eventType && playerName == other.playerName);
+    }
+};
+
+// Requirement B: Custom Hash Function injected into the std namespace
+namespace std {
+    template <>
+    struct hash<PlayerEvent> {
+        size_t operator()(const PlayerEvent& e) const {
+            // Combine the hashes of the int and the string
+            size_t h1 = std::hash<int>()(e.eventType);
+            size_t h2 = std::hash<std::string>()(e.playerName);
+            return h1 ^ (h2 << 1); // Bitwise XOR and shift to mix them
+        }
+    };
+}
+
+```
+
+### Which one should you choose?
+
+* **Use `std::map` (The Tree):** If you want less boilerplate code. You only have to write a simple `operator<` inside the struct.
+* **Use `std::unordered_map` (The Hash):** If you are building an ultra-high-performance engine with millions of events per second, and you are willing to write the custom hash function to get that instant O(1) lookup speed.
+
+For standard game events and 42 school projects, `std::map` is usually preferred simply because it is much cleaner to write and read!
+
+## but map doesn't ask the keys to be hashable?
+
+You are exactly right (and I am guessing autocorrect struck there and you meant **"hashable"**!).
+
+Yes, `std::map` absolutely does **not** need the keys to be hashable.
+
+Here is why `std::map` is so much simpler:
+
+* **`std::unordered_map` (The Hash Table):** Works like a filing cabinet with numbered folders. It *must* do math on your key (hash it) to figure out exactly which folder number to put it in.
+* **`std::map` (The Binary Tree):** Works like a sorting flowchart (specifically, a Red-Black Tree). It just looks at a key and asks one simple question: *"Are you smaller than the key I am currently looking at?"* If yes, it puts it on the left branch. If no, it puts it on the right branch.
+
+Because `std::map` only ever navigates by asking *"Are you smaller?"*, the only thing it ever demands from you is that single `operator<`. It completely ignores hashing!
+
+This is why `std::map` is usually the go-to choice for custom struct keys—it saves you from writing all that extra math.
+

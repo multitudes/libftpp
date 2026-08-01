@@ -72,6 +72,23 @@ public:
   }
 };
 
+// =========================================================================
+// 1. The Custom Event Struct
+// =========================================================================
+
+struct PlayerEvent {
+  int eventType; // used like enum
+  std::string playerName;
+
+  // needed by std::map
+  bool operator<(const PlayerEvent &other) const {
+    if (eventType != other.eventType) {
+      return eventType < other.eventType;
+    }
+    return playerName < other.playerName;
+  }
+};
+
 // =============================================================================
 // Main Test
 // =============================================================================
@@ -191,6 +208,55 @@ int main() {
   myPlayer.load(saveSlot1); // Load the exact same snapshot a second time
   myPlayer.printStatus();
   std::cout << "Success! The snapshot is perfectly intact.\n";
+
+  // --------------------- Observer ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Observer ===========\n";
+  std::cout << "=== 1. Starting ===\n";
+  // Our central event manager, templated to use our custom struct
+  Observer<PlayerEvent> gameEvents;
+
+  // Define some specific event signatures
+  PlayerEvent aliceLevelUp = {1, "Alice"};
+  PlayerEvent bobLevelUp = {1, "Bob"};
+  PlayerEvent aliceDeath = {2, "Alice"};
+
+  std::cout << "=== PHASE 1: Subscribing to Events ===\n";
+
+  // UI System subscribes to Alice's level up
+  gameEvents.subscribe(aliceLevelUp, []() {
+    std::cout << "[UI System] FLASHING CONGRATS FOR ALICE!\n";
+  });
+
+  // Audio System ALSO subscribes to Alice's level up
+  gameEvents.subscribe(aliceLevelUp, []() {
+    std::cout << "[Audio System] Playing level-up chime for Alice!\n";
+  });
+
+  // UI System subscribes to Bob's level up
+  gameEvents.subscribe(bobLevelUp, []() {
+    std::cout << "[UI System] Flashing congrats for Bob!\n";
+  });
+
+  std::cout << "Subscribers registered successfully.\n\n";
+
+  std::cout << "=== PHASE 2: Triggering Events ===\n";
+
+  std::cout << "--> Action: Alice levels up!\n";
+  gameEvents.notify(aliceLevelUp);
+  // Expectation: Triggers both the UI and Audio lambdas for Alice.
+
+  std::cout << "\n--> Action: Bob levels up!\n";
+  gameEvents.notify(bobLevelUp);
+  // Expectation: Triggers ONLY the UI lambda for Bob. Alice's audio shouldn't
+  // play.
+
+  std::cout << "\n--> Action: Alice dies!\n";
+  gameEvents.notify(aliceDeath);
+  // Expectation: Nothing happens! Nobody subscribed to this event,
+  // and our find() method safely ignores it without crashing.
+
+  std::cout << "\nAll events processed successfully.\n";
 
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";

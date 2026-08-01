@@ -81,7 +81,7 @@ private:
 public:
   Object(TType *ptr = nullptr, Pool *pool = nullptr) : _ptr(ptr), _pool(pool) {}
   ~Object() {
-    std::cout << "Entering destructor" << std::endl;
+    std::cout << "Entering Pool::Object destructor " << std::endl;
     if (_ptr) {
       // Tell the pool this specific index is free again
       if (_pool) {
