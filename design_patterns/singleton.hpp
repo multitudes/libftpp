@@ -1,16 +1,34 @@
 #pragma once
 
+#include <cstddef>
 #ifndef SINGLETON_HPP
 #define SINGLETON_HPP
 
+#include <stdexcept> // Replaced <exception> to use std::runtime_error
+#include <utility>   // Required for std::forward
+
 template <typename TType> class Singleton {
 private:
-  static TType _instance;
+  static TType *_instance;
+
+  // Optional but best practice
+  Singleton() = default;
+  ~Singleton() = default;
 
 public:
-  TType *instance() {}
+  static TType *instance() { return _instance; }
 
-  template <typename... TArgs> void instantiate(TArgs &&...p_args) {}
+  template <typename... TArgs> static void instantiate(TArgs &&...p_args) {
+    if (_instance != nullptr) {
+      throw std::runtime_error(
+          "Error: Singleton instance already initialized!"); //?
+    }
+    _instance = new TType(std::forward<TArgs>(p_args)...);
+  }
 };
+
+// A rule in C++ about static class variables: you have to actually allocate
+// their memory outside of the class definition in your header file.
+template <typename TType> TType *Singleton<TType>::_instance = nullptr;
 
 #endif
