@@ -1,7 +1,9 @@
 #include "design_patterns/singleton.hpp"
 #include "libftpp.hpp"
+#include <chrono>
 #include <iostream>
-#include <string>
+#include <thread>
+#include <vector>
 
 // =============================================================================
 // Dummy Class to test our Pool
@@ -124,6 +126,28 @@ std::string stateToString(EnemyState state) {
   if (state == ATTACK)
     return "ATTACK";
   return "UNKNOWN";
+}
+
+// =========================================================================
+// The Worker Function
+// =========================================================================
+void workerTask(int threadID, std::string taskName) {
+  // 1. Set the prefix.
+  // Because threadSafeCout is 'thread_local', Thread 1's prefix
+  // will NOT overwrite Thread 2's prefix! They each have their own copy.
+  threadSafeCout.setPrefix("[Worker " + std::to_string(threadID) + " | " +
+                           taskName + "] ");
+
+  for (int i = 1; i <= 3; ++i) {
+    // 2. Chaining multiple << operators.
+    // This all goes into the thread's private invisible buffer first.
+    threadSafeCout << "Processing step " << i << "..." << std::endl;
+
+    // Sleep for a few milliseconds to force the OS to switch threads.
+    // This guarantees that if our code wasn't thread-safe, the lines would
+    // overlap!
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
 }
 
 // =============================================================================
@@ -390,6 +414,38 @@ int main() {
   } catch (const std::exception &e) {
     std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
   }
+
+  // --------------------- iostream ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ thread safe iostream ===========\n";
+  std::cout << "=== 1. Starting ===\n";
+  std::cout << "=== PHASE 1: Launching Threads ===\n\n";
+
+  // Create a vector to hold our threads
+  std::vector<std::thread> workers;
+
+  // Spawn 3 threads, passing them an ID and a mock task name
+  workers.push_back(std::thread(workerTask, 1, "Audio"));
+  workers.push_back(std::thread(workerTask, 2, "Physics"));
+  workers.push_back(std::thread(workerTask, 3, "Network"));
+
+  // Wait for all threads to finish their work
+  for (auto &worker : workers) {
+    if (worker.joinable()) {
+      worker.join();
+    }
+  }
+
+  std::cout << "\n=== PHASE 2: Testing Input (Prompt) ===\n\n";
+
+  // We can also test the prompt feature from the main thread!
+  threadSafeCout.setPrefix("[Main Thread] ");
+  int userAge = 0;
+
+  // Uncomment this line below if you want to test the interactive input!
+  threadSafeCout.prompt("Enter your age to exit: ", userAge);
+
+  threadSafeCout << "Test complete. User age entered: " << userAge << std::endl;
 
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";

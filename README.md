@@ -773,4 +773,191 @@ To make this work, we need to figure out how to internally store all these regis
 
 However, mapping the *transitions* is a bit trickier because a transition is defined by **two** states (the `startState` and the `finalState`).
 
-How do you think we could combine two `TState` values into a single key so we can store our transition lambdas in a C++ `std::map`?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## iostream - thread safe
+
+
+It is completely normal that `iostream` feels like a bit of a black box. In C++, we get so used to just typing `std::cout <<` that we rarely stop to ask what it is actually doing behind the scenes!
+
+Here is the exact breakdown of what `iostream` is, whether we cloned it, and how our custom code actually works.
+
+### What is `iostream` anyway?
+
+In C++, **iostream** stands for **Input/Output Stream**.
+
+Think of a "stream" literally like a flowing river of characters.
+
+* **`std::cout` (Character Output):** This is a river flowing *out* of your program onto the console screen.
+* **`std::cin` (Character Input):** This is a river flowing *into* your program from the user's keyboard.
+
+When you type `std::cout << "Hello"`, you are taking the word "Hello" and throwing it into the output river.
+
+### Did we build a clone?
+
+The subject says: *"provide an equivalent to std::cout so there's no need to create a custom iostream."*
+
+We did not rewrite the entire C++ standard library from scratch (that would take thousands of lines of code!). Instead, we built a **Wrapper**. We created a class that *looks* and *acts* exactly like `std::cout`, so a programmer can use it without learning anything new.
+
+We essentially built a filter that sits *on top* of the real `std::cout`. It intercepts the data, organizes it, adds a prefix, and then safely hands it over to the real `std::cout`.
+
+---
+
+### How our code works, piece by piece
+
+Here is exactly how our custom wrapper intercepts and manages the stream.
+
+**1. The Buffer (`std::ostringstream _buffer`)**
+
+* Normally, when you throw words into `std::cout`, they go straight to the screen.
+* Because we have multiple threads competing to print, we can't allow that. Instead, every thread gets an `ostringstream` (Output String Stream). Think of this as a private **waiting room**. Everything the thread wants to print goes into this waiting room first, safely hidden from the other threads.
+
+**2. The Standard Overload (`operator<<(const T& value)`)**
+
+* This is the function that intercepts normal data (like integers, strings, or floats).
+* When a thread types `threadSafeCout << "Hello"`, this function grabs "Hello" and shoves it into the thread's private waiting room (`_buffer`).
+* It does **not** print to the screen yet, and it does **not** lock the console. It just gathers the data.
+
+**3. The Trigger Overload (`operator<<(std::ostream& (*manip)(std::ostream&))`)**
+
+* This piece looks terrifying, but it has a very specific job: it catches **Manipulators**, the most famous of which is `std::endl`.
+* `std::endl` isn't a string; it is actually a function that means "End the line and flush the stream."
+* When our class sees `std::endl`, it treats it as the trigger to finally print. It grabs the global lock (`std::mutex`), prints the thread's prefix, dumps the entire contents of the waiting room (`_buffer`) to the real `std::cout` all at once, applies the `std::endl`, and then unlocks.
+
+**4. The `thread_local` Keyword**
+
+* This is the magic that keeps everything separate. If we just created a normal global `ThreadSafeIOStream threadSafeCout;`, all the threads would try to shove their words into the exact same waiting room, causing a massive mess.
+* By adding `thread_local`, we tell the C++ compiler: *"Every time a new thread is spawned, silently create a brand new, invisible copy of `threadSafeCout` just for them."*
+
+**5. The `static std::mutex**`
+
+* A mutex (Mutual Exclusion) is like a "Talking Stick" in a classroom. Whoever holds the stick is allowed to talk (print to the screen). Everyone else must wait in silence.
+* Because we made it `static`, it means that even if `thread_local` creates 100 different copies of our `ThreadSafeIOStream` object, they all share this **one single talking stick**.
+
+## Q :in C when I use mutex I need to lock/unlock. I do not see the unlock here?
+You have a fantastic eye! Coming from C, you are completely right to be suspicious. In C (using `pthread`), if you `pthread_mutex_lock()` and forget to `pthread_mutex_unlock()`, your program will freeze forever in a deadlock.
+
+In the C++ code we wrote, there is no `unlock()` because we are using one of the most powerful features of C++: **RAII** (Resource Acquisition Is Initialization), specifically through a tool called `std::lock_guard`.
+
+Here is exactly how it replaces the manual C-style locking.
+
+### The Magic of `std::lock_guard`
+
+When you look at this line in our code:
+
+```cpp
+std::lock_guard<std::mutex> lock(_io_mutex);
+
+```
+
+You are not just calling a function; you are creating a temporary local object named `lock`.
+
+**1. The Constructor (The Lock)**
+The moment that `lock` object is created, its constructor automatically grabs the `_io_mutex` and locks it. This is exactly the same as calling `pthread_mutex_lock()`.
+
+**2. The Destructor (The Unlock)**
+In C++, whenever a local object goes "out of scope" (meaning the function it was created in finishes and hits the closing bracket `}`), the object is destroyed.
+When the `lock` object is destroyed, its destructor automatically calls `unlock()` on the mutex.
+
+### Why C++ does it this way (The Safety Net)
+
+Imagine you have a function that locks a mutex, does some math, and then unlocks it.
+
+**The C Way:**
+
+```c
+pthread_mutex_lock(&my_mutex);
+if (math_fails) {
+    // DANGER! If we return here, we forgot to unlock! Deadlock!
+    return -1; 
+}
+pthread_mutex_unlock(&my_mutex);
+
+```
+
+**The C++ Way:**
+
+```cpp
+void doMath() {
+    std::lock_guard<std::mutex> lock(my_mutex); // Locked here
+    
+    if (math_fails) {
+        throw std::runtime_error("Math failed"); 
+        // We threw an error and left the function early, BUT the 'lock' 
+        // object is destroyed as we leave, so it automatically unlocks!
+    }
+} // 'lock' is destroyed here, automatically unlocking.
+
+```
+
+By tying the lock to the lifespan of an object, C++ absolutely guarantees that the mutex will *always* be unlocked, even if your code crashes, throws an exception, or returns early. It completely removes human error from the equation!
+
+## is lockguard a templsate
+You have a fantastic eye for C++ syntax! Yes, the angle brackets `< >` mean `std::lock_guard` is a template, which absolutely means it was designed to lock other things besides a standard `std::mutex`.
+
+`std::lock_guard` is completely blind to what class you actually give it. It only has one strict rule: **Whatever type you put inside those angle brackets must have a `lock()` method and an `unlock()` method.**
+
+Here are the other things you will commonly see `std::lock_guard` locking in C++:
+
+### 1. Other Standard Library Mutexes
+
+C++ provides several specialized mutexes for different scenarios, and `lock_guard` works with all of them:
+
+* **`std::recursive_mutex`:** Normally, if a thread locks a mutex and then accidentally tries to lock it *again* (like in a recursive function), the program deadlocks. A recursive mutex allows the same thread to lock it multiple times safely.
+* **`std::timed_mutex`:** A mutex that allows you to specify a timeout. If it can't get the lock within 5 seconds, it gives up instead of waiting forever.
+* **`std::shared_mutex` (C++17):** Used for "Read/Write" locks, where you might want multiple threads to be able to read data simultaneously, but only one thread to write.
+
+### 2. Your Own Custom Classes
+
+Because it is a template, you can actually use `std::lock_guard` on a completely custom class that you write yourself, as long as you provide the required methods!
+
+Here is an example of how you could trick `std::lock_guard` into managing a custom class:
+
+```cpp
+#include <iostream>
+#include <mutex>
+
+// A custom class that is NOT a real mutex, but acts like one
+class DummyLock {
+public:
+    void lock() {
+        std::cout << "Dummy is locking!\n";
+    }
+    
+    void unlock() {
+        std::cout << "Dummy is unlocking!\n";
+    }
+};
+
+void testFunction() {
+    DummyLock myDummy;
+    
+    // std::lock_guard happily accepts our custom class!
+    std::lock_guard<DummyLock> guard(myDummy); 
+    
+    std::cout << "Doing some work...\n";
+} // guard is destroyed here, and automatically calls myDummy.unlock()
+
+```
+
+When you understand that `std::lock_guard` is just a template that automatically calls `lock()` when it is born and `unlock()` when it dies, it takes all the mystery out of it!
