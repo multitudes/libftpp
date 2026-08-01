@@ -6,5 +6,6 @@
 #include "data_structures/data_structures.hpp" // IWYU pragma: export
 #include "design_patterns/design_patterns.hpp" // IWYU pragma: export
 #include "iostream/thread_safe_iostream.hpp"   // IWYU pragma: export
+#include "thread/threading.hpp"                // IWYU pragma: export
 
 #endif

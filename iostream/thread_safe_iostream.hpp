@@ -1,11 +1,11 @@
 #pragma once
 
-#include <ostream>
 #ifndef THREAD_SAFE_IOSTREAM_HPP
 #define THREAD_SAFE_IOSTREAM_HPP
 
 #include <iostream>
 #include <mutex>
+#include <ostream>
 #include <sstream>
 #include <string>
 

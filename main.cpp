@@ -447,6 +447,34 @@ int main() {
 
   threadSafeCout << "Test complete. User age entered: " << userAge << std::endl;
 
+  // --------------------- thread safe queue ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ thread safe queue ===========\n";
+  std::cout << "=== 1. Starting ===\n";
+
+  ThreadSafeQueue<std::string> jobQueue;
+
+  std::cout << "=== 1. Testing Pushes ===\n";
+  jobQueue.push_back("Task B (Back)");
+  jobQueue.push_front("Task A (Front)");
+  jobQueue.push_back("Task C (Back)");
+
+  std::cout << "Tasks added successfully.\n\n";
+
+  std::cout << "=== 2. Testing Pops ===\n";
+  // Expected order based on our pushes: A, B, C
+  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be A
+  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be B
+  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be C
+
+  std::cout << "\n=== 3. Testing Exception ===\n";
+  try {
+    std::cout << "Attempting to pop from an empty queue...\n";
+    jobQueue.pop_front(); // This should trigger the throw!
+  } catch (const std::exception &e) {
+    std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
+  }
+
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";
   return 0;

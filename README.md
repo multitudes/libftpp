@@ -961,3 +961,70 @@ void testFunction() {
 ```
 
 When you understand that `std::lock_guard` is just a template that automatically calls `lock()` when it is born and `unlock()` when it dies, it takes all the mystery out of it!
+
+## the prompt?
+Ah, the "testing input prompt" refers to the final part of our `main.cpp` file where we test the custom `prompt()` function required by your subject!
+
+Let's break down exactly what that part of the code is doing and why it exists.
+
+### The Problem it Solves
+
+Normally, if you want to ask a user a question in C++, you do this:
+
+```cpp
+std::cout << "Enter your age: ";
+std::cin >> userAge;
+
+```
+
+But in a multithreaded program, this is incredibly dangerous! If you print "Enter your age: ", but before the user can type their answer, Thread 2 suddenly prints `"Physics task finished!"`, the console gets completely scrambled.
+
+To fix this, your subject asked you to build a single function that handles **both** the printing of the question and the reading of the answer under one single, unbreakable lock.
+
+### How we built it in `thread_safe_iostream.hpp`
+
+Here is the function we wrote:
+
+```cpp
+template<typename T>
+void prompt(const std::string& question, T& dest) {
+    // 1. Lock the console so NO OTHER THREAD can interrupt us!
+    std::lock_guard<std::mutex> lock(_io_mutex);
+    
+    // 2. Print our prefix and the question
+    std::cout << _prefix << question;
+    
+    // 3. Wait for the user to type their answer and hit Enter
+    std::cin >> dest;
+    
+} // 4. The lock is destroyed here, and the console is finally freed for other threads.
+
+```
+
+*Note: Notice how `T& dest` has an ampersand (`&`)? That means we are passing the variable by **reference**. Instead of giving the function a copy of the variable, we are handing it the actual memory address so `std::cin` can inject the user's typed answer directly into it.*
+
+### How we tested it in `main.cpp`
+
+At the very end of our `main.cpp`, after all the worker threads finish, we run this code:
+
+```cpp
+// 1. Change the prefix so we know it's the main program talking
+threadSafeCout.setPrefix("[Main Thread] ");
+
+// 2. Create an empty integer to hold the user's answer
+int userAge = 0;
+    
+// 3. Call our custom function! 
+threadSafeCout.prompt("Enter your age to exit: ", userAge);
+    
+// 4. Prove that it worked by printing the variable
+threadSafeCout << "Test complete. User age entered: " << userAge << std::endl;
+
+```
+
+### What you see on the screen
+
+When the code hits that `prompt` line, the terminal will literally freeze and display:
+`[Main Thread] Enter your age to exit: `
+
+The cursor will blink there, waiting. Because of our `lock_guard`, if any other thread were still running and tried to print something, it would be forced to wait silently in the background. Once you type a number (like `42`) and press Enter, the program stores `42` into `userAge`, releases the lock, and prints the final confirmation line!
