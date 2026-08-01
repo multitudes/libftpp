@@ -49,7 +49,7 @@ public:
     if (it == _transitions.end()) {
       throw std::runtime_error("Invalid transition attempted!");
     }
-    it.second();
+    it->second();
     _currentState = newState;
   }
 

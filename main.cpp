@@ -110,6 +110,22 @@ public:
   }
 };
 
+// =========================================================================
+// For the state machine
+// =========================================================================
+enum EnemyState { IDLE, CHASE, ATTACK };
+
+// Helper function to print enum names nicely
+std::string stateToString(EnemyState state) {
+  if (state == IDLE)
+    return "IDLE";
+  if (state == CHASE)
+    return "CHASE";
+  if (state == ATTACK)
+    return "ATTACK";
+  return "UNKNOWN";
+}
+
 // =============================================================================
 // Main Test
 // =============================================================================
@@ -309,6 +325,71 @@ int main() {
   // Uncommenting the line below will cause a COMPILER ERROR because the
   // constructor is private!
   // GameManager illegalManager(10, "Normal");
+
+  // --------------------- State Machine ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ State Machine ===========\n";
+  std::cout << "=== 1. Starting ===\n";
+  StateMachine<EnemyState> ai;
+
+  std::cout << "=== PHASE 1: Setting up the Machine ===\n";
+
+  // Add valid states (The first one added, IDLE, becomes the starting state)
+  ai.addState(IDLE);
+  ai.addState(CHASE);
+  ai.addState(ATTACK);
+
+  // Register Actions (What happens DURING a state)
+  ai.addAction(IDLE, []() {
+    std::cout << "[Action] Enemy is standing still, picking its nose...\n";
+  });
+  ai.addAction(CHASE, []() {
+    std::cout << "[Action] Enemy is sprinting towards the player!\n";
+  });
+  // NOTICE: We intentionally forget to add an action for ATTACK to test our
+  // exception later!
+
+  // Register Transitions (What happens BETWEEN states)
+  ai.addTransition(IDLE, CHASE, []() {
+    std::cout << "[Transition] Enemy spots you! *ROARS*\n";
+  });
+  ai.addTransition(CHASE, ATTACK, []() {
+    std::cout << "[Transition] Enemy gets close enough and draws its sword!\n";
+  });
+
+  std::cout << "\n=== PHASE 2: Running the Machine (Happy Path) ===\n";
+
+  // We are currently in IDLE
+  ai.update();
+
+  // Move to CHASE
+  std::cout << "\n--> Transitioning to CHASE...\n";
+  ai.transitionTo(CHASE); // Triggers the roar
+  ai.update();            // Triggers the sprinting action
+
+  // Move to ATTACK
+  std::cout << "\n--> Transitioning to ATTACK...\n";
+  ai.transitionTo(ATTACK); // Triggers drawing the sword
+
+  std::cout << "\n=== PHASE 3: Testing the Exceptions (Error Path) ===\n";
+
+  std::cout << "\n--> Test A: Missing Update Action\n";
+  try {
+    // We are in ATTACK, but we never registered an addAction for ATTACK!
+    ai.update();
+  } catch (const std::exception &e) {
+    std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
+  }
+
+  std::cout << "\n--> Test B: Invalid Transition\n";
+  try {
+    // We are in ATTACK. We never registered a transition from ATTACK back to
+    // IDLE!
+    std::cout << "Trying to force transition from ATTACK to IDLE...\n";
+    ai.transitionTo(IDLE);
+  } catch (const std::exception &e) {
+    std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
+  }
 
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";
