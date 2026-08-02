@@ -493,14 +493,34 @@ int main() {
   std::cout << "\n\n================================\n";
   std::cout << "============ Thread ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
-  Thread thread1("Thread1 ", myFunction1);
-  Thread thread2("Thread2 ", myFunction2);
+  Thread thread1("Thread1", myFunction1);
+  Thread thread2("Thread2", myFunction2);
 
   thread1.start();
   thread2.start();
 
   thread1.stop();
   thread2.stop();
+
+  // --------------------- WorkerPool ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ WorkerPool ===========\n";
+  std::cout << "=== 1. Starting ===\n\n";
+  WorkerPool pool(4);
+
+  auto job = []() {
+    threadSafeCout << "Executing job on thread: " << std::this_thread::get_id()
+                   << std::endl;
+    // Simulate a "heavy" computation by sleeping for 5 milliseconds
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  };
+
+  for (int i = 0; i < 1000; ++i) {
+    pool.addJob(job);
+  }
+
+  std::this_thread::sleep_for(
+      std::chrono::seconds(2)); // Wait for jobs to finish
 
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";

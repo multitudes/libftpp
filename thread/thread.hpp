@@ -19,7 +19,6 @@ public:
   ~Thread();
 
   void start();
-
   void stop();
 };
 

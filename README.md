@@ -1159,3 +1159,44 @@ void start() {
 By wrapping both instructions inside that lambda `[this]() { ... }`, we guarantee that the new worker thread puts on its nametag *before* it starts doing the actual work.
 
 Does that boundary between what the main thread executes and what the new thread executes make sense? And if so, how do you think we should write the `stop()` method to safely shut this `_thread` down?
+
+## for loops, i++ or ++i
+
+Yes, in this specific situation, they are exactly the same! The loop will run the exact same number of times, and the end result of your program will be completely identical.
+
+However, you will notice that almost all experienced C++ programmers habitually write `++i` instead of `i++`. This is because of a very specific quirk in how C++ handles memory under the hood.
+
+Here is the exact difference between the two and why one is considered a C++ "best practice."
+
+
+### 1. `i++` (Post-Increment)
+
+When you use post-increment, you are telling the computer: *"Give me the current value of `i`, and then add 1 to it in the background."*
+To achieve this, the computer must actually do three things:
+
+1. Make a temporary copy of `i` in memory.
+2. Add 1 to the real `i`.
+3. Return the temporary copy to you.
+
+### 2. `++i` (Pre-Increment)
+
+When you use pre-increment, you are telling the computer: *"Add 1 to `i` immediately, and give me the new result."*
+The computer only does two things:
+
+1. Add 1 to the real `i`.
+2. Return the real `i` directly.
+
+### Why does it matter in a `for` loop?
+
+For simple types like `int` or `size_t`, modern compilers are smart enough to realize you aren't actually using the returned copy inside the `for` loop statement, so they optimize the copy away. For an `int`, they run at the exact same speed.
+
+**BUT**, in C++ you frequently write loops using "Iterators" (which are heavy, complex objects used to navigate through vectors and maps). For example:
+
+```cpp
+for (std::vector<std::string>::iterator it = myVector.begin(); it != myVector.end(); it++)
+
+```
+
+If you use `it++` there, the computer is forced to make a complete copy of that heavy iterator object on every single loop, which can significantly slow down your program!
+
+Because of this, C++ developers train their muscle memory to **always use `++i**` in loops. It guarantees you are never making accidental, unnecessary copies, regardless of whether you are looping with a simple integer or a massive custom object.

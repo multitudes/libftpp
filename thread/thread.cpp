@@ -7,7 +7,7 @@ Thread::~Thread() { stop(); };
 
 void Thread::start() {
   _thread = std::thread([this]() {
-    threadSafeCout.setPrefix(this->_name);
+    threadSafeCout.setPrefix("[" + this->_name + "] ");
     this->_functToExecute();
   });
 }
@@ -15,5 +15,7 @@ void Thread::start() {
 void Thread::stop() {
   if (_thread.joinable()) {
     _thread.join();
+    threadSafeCout << "stopping thread: " << std::this_thread::get_id()
+                   << std::endl;
   }
 }
