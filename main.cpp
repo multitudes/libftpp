@@ -149,6 +149,21 @@ void workerTask(int threadID, std::string taskName) {
   }
 }
 
+// =========================================================================
+// Thread
+// =========================================================================
+void myFunction1() {
+  for (int i = 0; i < 5; ++i) {
+    threadSafeCout << "Hello from Function1, iteration " << i << std::endl;
+  }
+}
+
+void myFunction2() {
+  for (int i = 0; i < 5; ++i) {
+    threadSafeCout << "Hello from Function2, iteration " << i << std::endl;
+  }
+}
+
 // =============================================================================
 // Main Test
 // =============================================================================
@@ -473,6 +488,19 @@ int main() {
   } catch (const std::exception &e) {
     std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
   }
+
+  // --------------------- Thread ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Thread ===========\n";
+  std::cout << "=== 1. Starting ===\n\n";
+  Thread thread1("Thread1 ", myFunction1);
+  Thread thread2("Thread2 ", myFunction2);
+
+  thread1.start();
+  thread2.start();
+
+  thread1.stop();
+  thread2.stop();
 
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";

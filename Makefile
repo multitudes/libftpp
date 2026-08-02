@@ -24,7 +24,7 @@ ARFLAGS     = rcs
 # As you create your modules in their folders, add the .cpp files here.
 # Example: SRCS = data_structures/data_buffer.cpp design_patterns/memento.cpp
 SRCS        =  data_structures/data_buffer.cpp design_patterns/memento.cpp \
-				iostream/thread_safe_iostream.cpp
+				iostream/thread_safe_iostream.cpp thread/thread.cpp
 
 OBJS        = $(SRCS:.cpp=.o)
 

@@ -15,18 +15,12 @@ private:
   std::thread _thread;
 
 public:
-  Thread(const std::string &name, std::function<void()> functToExecute)
-      : _name(name), _functToExecute(functToExecute) {}
-  ~Thread() = default;
+  Thread(const std::string &name, std::function<void()> functToExecute);
+  ~Thread();
 
-  void start() {
-    _thread = std::thread([this]() {
-      threadSafeCout.setPrefix(this->_name);
-      this->_functToExecute();
-    });
-  }
+  void start();
 
-  void stop() {}
+  void stop();
 };
 
 #endif
