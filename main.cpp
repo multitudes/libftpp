@@ -1,4 +1,3 @@
-#include "design_patterns/singleton.hpp"
 #include "libftpp.hpp"
 #include <chrono>
 #include <iostream>

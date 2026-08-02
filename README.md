@@ -1028,3 +1028,134 @@ When the code hits that `prompt` line, the terminal will literally freeze and di
 `[Main Thread] Enter your age to exit: `
 
 The cursor will blink there, waiting. Because of our `lock_guard`, if any other thread were still running and tried to print something, it would be forced to wait silently in the background. Once you type a number (like `42`) and press Enter, the program stores `42` into `userAge`, releases the lock, and prints the final confirmation line!
+
+## Threads
+we are building a wrapper around C++'s standard std::thread. At first glance, it might seem silly to build a wrapper for something that already exists, but this subject introduces a few brilliant architectural twists.
+
+Here are the three main conceptual challenges we need to solve based on the subject image.
+
+1. The Delayed Launch (The Constructor vs. start())
+Normally in C++, the moment you create a std::thread, it instantly starts running. It does not wait for permission.
+However, your subject explicitly states that the constructor only "sets up the thread data, waiting for a start() call to launch the function."
+
+This means our Thread class needs to act like a loaded spring. The constructor will securely store the name and the functToExecute inside the class as private variables, but it won't actually spawn the real std::thread until the user explicitly calls start().
+
+2. The Integration Hook (Connecting to ThreadSafeIOStream)
+The hint in image_70a9bf.png is the most important part of this exercise: "The thread name should be used by ThreadSafeIOStream and must provide it with a prefix..."
+
+This is where things get slightly tricky. Remember how we made threadSafeCout using the thread_local keyword? That means the prefix must be set from inside the new thread while it is running. We can't set it from the main thread before the worker starts.
+
+When start() is called, we can't just blindly hand the user's functToExecute directly to the OS. We have to create a "middleman" function that does two things:
+Calls threadSafeCout.setPrefix(name).
+Then executes the user's functToExecute.
+3. Graceful Shutdown (stop())
+The stop() method requires us to "join it properly."
+In multithreading, join() means "pause the main program and wait patiently for this specific thread to finish whatever it is doing." If you destroy a std::thread while it is still running without joining it, the C++ program will violently crash (specifically, it throws a std::terminate error). Our stop() method will act as a safety net to ensure we wait for the thread to complete before cleaning it up.
+
+Since we need to intercept the launch to set up the ThreadSafeIOStream prefix before the user's actual function runs, do you have any ideas on how we might bundle that setup step and the user's function together when we finally trigger the real std::thread?
+You have hit on some of the absolute deepest and most important questions in multithreaded programming! Let's untangle this piece by piece, because your instincts are actually spot on.
+
+### 1. Are stacks shared between threads?
+
+**No!** And this is a crucial rule of multithreading:
+
+* All threads share the **Heap** (where `new` and global variables live).
+* But every single thread gets its own personal, private **Stack** (where local variables and function call histories live).
+
+Because `threadSafeCout` is marked as `thread_local`, the compiler secretly places it in the thread's private memory. This is exactly why your deduction in your third question is 100% correct!
+
+To set the prefix, we *must* be inside the running thread. If we call `threadSafeCout.setPrefix()` from the constructor, we are just changing the main thread's prefix! We have to start the new thread *first*, and the very first thing it must do is set its own prefix before running the user's code.
+
+### 2. How does `std::thread(workerTask, 1, "Audio")` work?
+
+In the previous exercise, it looked weird because we passed a function name and its arguments separated by commas, rather than calling it like `workerTask(1, "Audio")`.
+
+This works because the C++ `std::thread` constructor uses a **Variadic Template** (exactly like the one we used in your `Singleton` class!).
+When you write `std::thread(workerTask, 1, "Audio")`, you are handing the thread a function pointer and a list of ingredients. The OS creates the new thread, and once it is fully booted up, it unpacks those ingredients and calls the function for you.
+
+### 3. The Solution: The "Middleman" Lambda
+
+Since the user passes us a function (`functToExecute`), but we *also* need to set the prefix first, we can't just hand the user's function directly to `std::thread`.
+
+Instead, we create a **Lambda function** (an anonymous function) inside our `start()` method. This lambda acts as our middleman. We hand the lambda to the `std::thread`.
+
+When the OS boots up the thread, it runs our lambda, which does the exact sequence you figured out:
+
+1. Access the global `threadSafeCout` (which is now local to this new thread!).
+2. Set the prefix using the stored `name`.
+3. Call the stored `functToExecute()`.
+
+Here is a sneak peek of what that `start()` method looks like conceptually:
+
+```cpp
+void Thread::start() {
+    // We launch a new thread, but instead of the user's function, 
+    // we give it a custom lambda that captures our class variables!
+    _thread = std::thread( [this]() {
+        
+        // 1. We are now INSIDE the new thread! Set the prefix.
+        threadSafeCout.setPrefix("[" + this->_name + "] ");
+        
+        // 2. Execute the function the user gave us in the constructor.
+        this->_functToExecute();
+        
+    });
+}
+
+```
+
+By wrapping it in a lambda, we gain total control over the startup sequence of the thread!
+
+Ah, that makes perfect sense! If those lines were in `start()`, you are incredibly close to the final answer.
+
+However, we are running into the "Thread Boundary" trap. This is the hardest part of multithreading to visualize, so let's break down exactly *who* is running those two lines of code in your `start()` function.
+
+### The "Who is doing what?" Problem
+
+Imagine the **Main Thread** is a manager, and the **New Thread** is a worker.
+
+When you write this:
+
+```cpp
+void start() {
+    // 1. The Manager says "Worker, start doing your job!"
+    _thread = std::thread(_functToExecute);
+    
+    // 2. The Manager then puts on a nametag with the worker's name.
+    threadSafeCout.setPrefix(_name);
+}
+
+```
+
+Do you see the bug? Because `start()` is being called by the Main Thread, the Main Thread is the one executing `setPrefix()`. It accidentally changed its *own* prefix instead of the worker's prefix!
+
+Because `threadSafeCout` is `thread_local`, the worker thread has its own separate, blank copy of `threadSafeCout` that never gets set.
+
+### The Solution: The Lambda Function
+
+To fix this, we have to bundle the nametag instruction *and* the job instruction together, and hand the whole package to the worker. We do this using a Lambda function.
+
+Here is exactly how you write that:
+
+```cpp
+void start() {
+    // We pass a lambda to std::thread. 
+    // The [this] tells the lambda: "You are allowed to look at my private variables."
+    _thread = std::thread([this]() {
+        
+        // EVERYTHING INSIDE THESE BRACKETS IS EXECUTED BY THE NEW THREAD!
+        
+        // 1. The new thread sets its own personal prefix
+        threadSafeCout.setPrefix(this->_name);
+        
+        // 2. The new thread executes the user's stored function
+        this->_functToExecute();
+        
+    });
+}
+
+```
+
+By wrapping both instructions inside that lambda `[this]() { ... }`, we guarantee that the new worker thread puts on its nametag *before* it starts doing the actual work.
+
+Does that boundary between what the main thread executes and what the new thread executes make sense? And if so, how do you think we should write the `stop()` method to safely shut this `_thread` down?

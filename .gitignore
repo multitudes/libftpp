@@ -60,3 +60,6 @@ vcpkg_installed/
 Testing/
 .cache/
 test_pool
+test.dSYM/Contents/Info.plist
+test.dSYM/Contents/Resources/DWARF/test
+test.dSYM/Contents/Resources/Relocations/aarch64/test.yml

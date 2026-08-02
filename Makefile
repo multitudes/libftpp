@@ -48,7 +48,7 @@ clean:
 	@echo "=================="
 	@echo "Cleaning object files..."
 	rm -f $(OBJS)
-	rm -f test_pool
+	rm -f test
 	@find . -name "*.dSYM" -delete -print
 	@find . -name "*~" -delete -print
 
@@ -62,9 +62,9 @@ re: fclean all
 test: all
 	@echo "=================="
 	@echo "Compiling test executable using $(NAME)..."
-	$(CXX) $(CXXFLAGS) main.cpp $(NAME) -o test_pool
-	@echo "Running test_pool..."
+	$(CXX) $(CXXFLAGS) main.cpp $(NAME) -o test
+	@echo "Running test..."
 	@echo "=================="
-	./test_pool
+	./test
 
 .PHONY: all clean fclean re
