@@ -453,13 +453,15 @@ int main() {
   std::cout << "\n=== PHASE 2: Testing Input (Prompt) ===\n\n";
 
   // We can also test the prompt feature from the main thread!
-  threadSafeCout.setPrefix("[Main Thread] ");
-  int userAge = 0;
+
+  // threadSafeCout.setPrefix("[Main Thread] ");
+  // int userAge = 0;
 
   // Uncomment this line below if you want to test the interactive input!
-  threadSafeCout.prompt("Enter your age to exit: ", userAge);
+  // threadSafeCout.prompt("Enter your age to exit: ", userAge);
 
-  threadSafeCout << "Test complete. User age entered: " << userAge << std::endl;
+  // threadSafeCout << "Test complete. User age entered: " << userAge <<
+  // std::endl;
 
   // --------------------- thread safe queue ---------------------
   std::cout << "\n\n================================\n";
@@ -542,6 +544,52 @@ int main() {
 
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
+  // --------------------- Message ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Message ===========\n";
+  std::cout << "=== 1. Starting ===\n\n";
+  // 1. Create a message of Type 99 (e.g., "Player Position Update")
+  Message msg(99);
+  std::cout << "[INFO] Message created with Type: " << msg.type() << "\n\n";
+
+  // 2. Create some trivially copyable variables to send
+  uint32_t playerId = 404;
+  float x_coord = 125.5f;
+  double y_coord = -89.1234;
+  bool isCrouching = true;
+
+  std::cout << "--- DATA TO SEND ---\n";
+  std::cout << "Player ID: " << playerId << "\n";
+  std::cout << "X Coord:   " << x_coord << "\n";
+  std::cout << "Y Coord:   " << y_coord << "\n";
+  std::cout << "Crouching: " << isCrouching << "\n\n";
+
+  // 3. Serialize (Pack the envelope)
+  // Thanks to returning `*this`, we can chain them together!
+  msg << playerId << x_coord << y_coord << isCrouching;
+
+  // 4. Create empty variables to hold the incoming data on the "Server" side
+  uint32_t receivedId = 0;
+  float receivedX = 0.0f;
+  double receivedY = 0.0;
+  bool receivedCrouching = false;
+
+  // 5. Deserialize (Unpack the envelope)
+  // CRITICAL: You must unpack in the EXACT same order you packed!
+  msg >> receivedId >> receivedX >> receivedY >> receivedCrouching;
+
+  std::cout << "--- RECEIVED DATA ---\n";
+  std::cout << "Player ID: " << receivedId << "\n";
+  std::cout << "X Coord:   " << receivedX << "\n";
+  std::cout << "Y Coord:   " << receivedY << "\n";
+  std::cout << "Crouching: " << receivedCrouching << "\n\n";
+
+  // 6. Test the buffer safety check!
+  // We already read all the bytes. If we try to read one more integer,
+  // it should fail gracefully and print your error message instead of crashing.
+  std::cout << "--- TESTING BUFFER BOUNDARY ---\n";
+  int data = 0;
+  msg >> data;
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";
   return 0;

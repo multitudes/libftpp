@@ -3,7 +3,7 @@
 #ifndef PERSISTENT_WORKER_HPP
 #define PERSISTENT_WORKER_HPP
 
-#include "threading.hpp"
+#include "thread.hpp"
 #include <functional>
 #include <map>
 #include <mutex>
