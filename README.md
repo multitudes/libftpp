@@ -1200,3 +1200,66 @@ for (std::vector<std::string>::iterator it = myVector.begin(); it != myVector.en
 If you use `it++` there, the computer is forced to make a complete copy of that heavy iterator object on every single loop, which can significantly slow down your program!
 
 Because of this, C++ developers train their muscle memory to **always use `++i**` in loops. It guarantees you are never making accidental, unnecessary copies, regardless of whether you are looping with a simple integer or a massive custom object.
+
+This is one of the most important architectural questions in modern C++. When you look at `std::vector<std::unique_ptr<Thread>>`, it looks like a massive, confusing mouthful of code.
+
+Why didn't we just write `std::vector<Thread> _workers;`?
+
+It comes down to three strict rules of C++ memory management and how the operating system handles threads.
+
+### 1. The "No Clones" Rule (Why we can't use `std::vector<Thread>`)
+
+Under the hood, our custom `Thread` class holds a `std::thread`. A `std::thread` is heavily tied to your computer's actual operating system.
+
+Imagine a real-life factory worker. You cannot magically press a "copy" button and clone a human worker. The same applies to operating system threads. Because you cannot copy a running OS thread, C++ specifically deletes the copy constructor for `std::thread`. Since our class contains a `std::thread`, our custom `Thread` object **cannot be copied**.
+
+If you use `std::vector<Thread>`, whenever the vector runs out of room, it tries to allocate a larger chunk of memory and *copy* the old elements into the new space. The compiler will see it trying to copy a thread, panic, and throw a massive error.
+
+### 2. The Pointer Loophole
+
+How do we get around the fact that vectors need to copy things, but threads can't be copied? **Pointers.**
+
+Instead of putting the workers *inside* the vector, we put the workers out in the main warehouse (the Heap memory). Then, we just hand the vector a piece of paper with the worker's address on it (a pointer).
+
+If the vector needs to resize, it just copies the pieces of paper. The actual worker thread is never copied, moved, or interrupted! That is why we must use a pointer: `std::vector<Thread*>`.
+
+### 3. The Cleanup Problem (Why `std::unique_ptr` instead of `*`)
+
+If we just used raw pointers (`std::vector<Thread*>`), C++ expects us to manually clean up the memory. In our destructor, we would have to loop through every worker and manually type `delete worker;`. If we forgot, or if the program crashed before it reached the destructor, we would cause a **Memory Leak**.
+
+`std::unique_ptr` is a "Smart Pointer." It acts exactly like a regular pointer, but it has one magical feature: **it cleans up after itself**.
+When the `WorkerPool` is destroyed, the vector is destroyed. When the vector is destroyed, the `unique_ptr` says, *"Ah, my container is dying! I will automatically delete the Thread I am pointing to."*
+
+### Summary
+
+* **`std::vector`**: Because we need a list to hold our multiple workers.
+* **`Pointer`**: Because vectors copy things, and we are legally not allowed to copy a thread.
+* **`std::unique_ptr`**: Because it automatically deletes the memory for us so we don't cause a memory leak when the factory closes down.
+
+Yes, you are exactly right! Both `std::unique_ptr` and `std::shared_ptr` were introduced in C++11, and together they completely revolutionized how C++ developers manage memory.
+
+While `unique_ptr` is all about **strict, exclusive ownership**, `shared_ptr` is all about **shared ownership**.
+
+Here is a breakdown of how it works and why you would use it.
+
+### The Magic of `std::shared_ptr`: Reference Counting
+
+When you create a `std::shared_ptr`, it creates a hidden counter in the background (called a Control Block).
+
+* Every time you make a copy of that `shared_ptr` and give it to a different part of your program, the counter goes **up** by 1.
+* Every time one of those parts of your program finishes and its pointer is destroyed, the counter goes **down** by 1.
+* When the counter hits **exactly 0**, the `shared_ptr` realizes, *"I am the very last person using this memory,"* and it finally deletes the underlying object.
+
+### An Analogy: The Living Room TV
+
+* **`std::unique_ptr` is like your toothbrush.** You own it exclusively. Nobody else is allowed to use it, and when you move out, you throw it in the trash.
+* **`std::shared_ptr` is like a TV in an apartment with roommates.** You all share ownership. If one roommate moves out, the TV stays because the others are still using it. The TV is only thrown away when the *very last* roommate moves out of the apartment.
+
+### Why didn't we use `shared_ptr` for our Worker Pool?
+
+You might be wondering why we didn't just use `std::shared_ptr<Thread>` for our workers just to be safe. It comes down to two reasons:
+
+1. **Performance Overhead:** Because `shared_ptr` has to constantly update that hidden counter every time it is moved or copied, it is slightly slower and uses a bit more memory than `unique_ptr`.
+2. **Architectural Design:** Our `WorkerPool` is the sole manager of the factory. No other part of our C++ program needs to own those worker threads. Because the `WorkerPool` is the exclusive owner, `unique_ptr` perfectly describes our design intent.
+
+As a general rule in modern C++: **Always default to `std::unique_ptr**`. Only upgrade to `std::shared_ptr` if you absolutely need multiple different classes to share the exact same piece of data at the same time!

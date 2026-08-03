@@ -3,7 +3,6 @@
 #ifndef THREAD_HPP
 #define THREAD_HPP
 
-#include "../iostream/thread_safe_iostream.hpp"
 #include <functional>
 #include <string>
 #include <thread>
