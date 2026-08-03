@@ -17,10 +17,16 @@ private:
 public:
   // to make compatible with the subject
   using Type = int;
+  Message();
   Message(int type);
   ~Message();
 
   int type() const;
+
+  // needed by class Client to facilitate the receiving and sending of data
+  size_t size() const;
+  const uint8_t *data() const;
+  void setBuffer(const std::vector<uint8_t> &data);
 
   // Serialization (Writing TO the buffer)
   template <typename T> Message &operator<<(const T &data) {

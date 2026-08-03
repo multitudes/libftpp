@@ -26,7 +26,7 @@ ARFLAGS     = rcs
 SRCS        =  data_structures/data_buffer.cpp design_patterns/memento.cpp \
 				iostream/thread_safe_iostream.cpp thread/thread.cpp \
 				thread/worker_pool.cpp thread/persistent_worker.cpp \
-				network/message.cpp 
+				network/message.cpp network/client.cpp network/server.cpp
 
 OBJS        = $(SRCS:.cpp=.o)
 

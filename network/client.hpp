@@ -1,12 +1,28 @@
 #pragma once
 
+#include "../thread/thread.hpp"
+#include "message.hpp"
 #include "network.hpp"
+#include <atomic>
 #include <cstdlib>
 #include <functional>
+#include <map>
+#include <mutex>
+#include <queue>
 #include <string>
+#include <sys/socket.h>
 
 class Client {
 private:
+  int _socketFd;
+  std::atomic<bool> _isConnected;
+  std::mutex _mutex;
+  std::map<Message::Type, std::function<void(const Message &msg)>> _actions;
+  std::queue<Message> _inbox;
+  std::unique_ptr<Thread> _listenerThread;
+
+  void _listenLoop();
+
 public:
   Client();
   ~Client();
