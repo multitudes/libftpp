@@ -1,14 +1,10 @@
 #pragma once
 
-#ifndef DATA_STRUCTURES_HPP
-#define DATA_STRUCTURES_HPP
-
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <utility>
 #include <vector>
-
-#include <iostream>
 
 template <typename TType> class Pool {
 public:
@@ -103,5 +99,3 @@ public:
 
   TType *operator->() { return _ptr; }
 };
-
-#endif

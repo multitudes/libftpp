@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef STATE_MACHINE_HPP
-#define STATE_MACHINE_HPP
-
 #include <functional>
 #include <map>
 #include <set>
@@ -67,5 +64,3 @@ public:
     it->second();
   }
 };
-
-#endif

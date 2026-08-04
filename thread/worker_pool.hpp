@@ -1,10 +1,7 @@
 #pragma once
 
-#include "thread.hpp"
-#ifndef WORKER_POOL_HPP
-#define WORKER_POOL_HPP
-
 #include "../thread/thread_safe_queue.hpp"
+#include "thread.hpp"
 #include <atomic>
 #include <memory>
 #include <vector>
@@ -29,5 +26,3 @@ public:
     virtual void execute() = 0;
   };
 };
-
-#endif

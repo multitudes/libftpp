@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef PERSISTENT_WORKER_HPP
-#define PERSISTENT_WORKER_HPP
-
 #include "thread.hpp"
 #include <functional>
 #include <map>
@@ -24,5 +21,3 @@ private:
   std::map<std::string, std::function<void()>> _tasks;
   std::unique_ptr<Thread> _worker;
 };
-
-#endif

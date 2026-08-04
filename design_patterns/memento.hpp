@@ -1,9 +1,6 @@
 #pragma once
 
-#ifndef MEMENTO_HPP
-#define MEMENTO_HPP
-
-#include "../libftpp.hpp"
+#include "../data_structures/data_buffer.hpp"
 
 class Memento {
 public:
@@ -20,5 +17,3 @@ private:
   virtual void _saveToSnapshot(Snapshot &snapshot) const = 0;
   virtual void _loadFromSnapshot(Snapshot &snapshot) = 0;
 };
-
-#endif

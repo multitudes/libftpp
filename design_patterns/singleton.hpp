@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef SINGLETON_HPP
-#define SINGLETON_HPP
-
 #include <stdexcept> // Replaced <exception> to use std::runtime_error
 #include <utility>   // Required for std::forward
 
@@ -29,5 +26,3 @@ public:
 // A rule in C++ about static class variables: you have to actually allocate
 // their memory outside of the class definition in your header file.
 template <typename TType> TType *Singleton<TType>::_instance = nullptr;
-
-#endif

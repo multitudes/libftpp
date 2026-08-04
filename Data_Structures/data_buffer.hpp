@@ -1,6 +1,4 @@
 #pragma once
-#ifndef DATA_BUFFER_HPP
-#define DATA_BUFFER_HPP
 
 #include <cstddef>
 #include <cstring>
@@ -40,5 +38,3 @@ public:
   size_t size() const;
   const std::vector<uint8_t> &getBuffer() const;
 };
-
-#endif

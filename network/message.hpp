@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef MESSAGE_HPP
-#define MESSAGE_HPP
-
 #include <cstring> // REQUIRED for std::memcpy
 #include <iostream>
 #include <type_traits> // REQUIRED for std::is_trivially_copyable
@@ -54,5 +51,3 @@ public:
     return *this;
   }
 };
-
-#endif

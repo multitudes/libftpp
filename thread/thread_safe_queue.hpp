@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef THREAD_SAFE_QUEUE_HPP
-#define THREAD_SAFE_QUEUE_HPP
-
 #include <deque>
 #include <mutex>
 
@@ -54,5 +51,3 @@ public:
     return value;
   }
 };
-
-#endif

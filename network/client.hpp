@@ -2,7 +2,6 @@
 
 #include "../thread/thread.hpp"
 #include "message.hpp"
-#include "network.hpp"
 #include <atomic>
 #include <cstdlib>
 #include <functional>

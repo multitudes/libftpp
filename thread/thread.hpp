@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef THREAD_HPP
-#define THREAD_HPP
-
 #include <functional>
 #include <string>
 #include <thread>
@@ -20,5 +17,3 @@ public:
   void start();
   void stop();
 };
-
-#endif

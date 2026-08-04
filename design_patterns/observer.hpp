@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef OBSERVER_HPP
-#define OBSERVER_HPP
-
 #include <functional>
 #include <map>
 #include <vector>
@@ -34,5 +31,3 @@ public:
     }
   }
 };
-
-#endif

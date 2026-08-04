@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef THREAD_SAFE_IOSTREAM_HPP
-#define THREAD_SAFE_IOSTREAM_HPP
-
 #include <iostream>
 #include <mutex>
 #include <ostream>
@@ -62,5 +59,3 @@ public:
 // We declare it 'extern' here so all files can see it, but we build it in the
 // .cpp file.
 extern thread_local ThreadSafeIOStream threadSafeCout;
-
-#endif
