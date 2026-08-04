@@ -1,4 +1,5 @@
 #include "client.hpp"
+#include "message.hpp"
 #include <arpa/inet.h>
 #include <cstddef>
 #include <cstdint>
@@ -11,7 +12,7 @@
 
 Client::Client() : _socketFd(-1), _isConnected(false) {}
 
-Client::~Client() {}
+Client::~Client() { disconnect(); }
 
 void Client::connect(const std::string &address, const size_t &port) {
   struct timeval tv;
@@ -59,51 +60,49 @@ void Client::connect(const std::string &address, const size_t &port) {
 // refactred to keep the connect function clean
 void Client::_listenLoop() {
   while (_isConnected) {
-    while (_isConnected) {
-      int type;
-      size_t bytes = ::recv(_socketFd, &type, sizeof(int), 0);
+    int type;
+    size_t bytes = ::recv(_socketFd, &type, sizeof(int), 0);
 
-      if (bytes < 0)
-        continue;
-      if (bytes == 0) {
-        _isConnected = false;
-        break;
-      }
-      type = ntohl(type);
-
-      // Read the Payload Size (4 bytes) - this is not in the subj but cannot
-      // be done without. like the content_length in http...
-      size_t payloadSize = 0;
-      bytes = ::recv(_socketFd, &payloadSize, sizeof(size_t), 0);
-      if (bytes < 0)
-        continue;
-      if (bytes == 0) {
-        _isConnected = false;
-        break;
-      }
-      payloadSize = ntohl(payloadSize);
-
-      Message msg(type);
-
-      std::vector<uint8_t> tempBuffer(payloadSize);
-      size_t totalRead = 0;
-
-      while (totalRead < payloadSize) {
-        // recv returns a ssize_t - important!
-        ssize_t r = ::recv(_socketFd, tempBuffer.data() + totalRead,
-                           payloadSize - totalRead, 0);
-
-        if (r > 0) {
-          totalRead += r;
-        } else if (r == 0) {
-          _isConnected = false;
-          break;
-        }
-      }
-      msg.setBuffer(tempBuffer);
-      std::lock_guard<std::mutex> lock(_mutex);
-      _inbox.push(msg);
+    if (bytes < 0)
+      continue;
+    if (bytes == 0) {
+      _isConnected = false;
+      break;
     }
+    type = ntohl(type);
+
+    // Read the Payload Size (4 bytes) - this is not in the subj but cannot
+    // be done without. like the content_length in http...
+    size_t payloadSize = 0;
+    bytes = ::recv(_socketFd, &payloadSize, sizeof(size_t), 0);
+    if (bytes < 0)
+      continue;
+    if (bytes == 0) {
+      _isConnected = false;
+      break;
+    }
+    payloadSize = ntohl(payloadSize);
+
+    Message msg(type);
+
+    std::vector<uint8_t> tempBuffer(payloadSize);
+    size_t totalRead = 0;
+
+    while (totalRead < payloadSize) {
+      // recv returns a ssize_t - important!
+      ssize_t r = ::recv(_socketFd, tempBuffer.data() + totalRead,
+                         payloadSize - totalRead, 0);
+
+      if (r > 0) {
+        totalRead += r;
+      } else if (r == 0) {
+        _isConnected = false;
+        break;
+      }
+    }
+    msg.setBuffer(tempBuffer);
+    std::lock_guard<std::mutex> lock(_mutex);
+    _inbox.push(msg);
   }
 }
 
@@ -147,16 +146,38 @@ void Client::send(const Message &message) {
   uint32_t payloadSize = static_cast<uint32_t>(message.size());
   uint32_t networkSize = htonl(payloadSize);
   ssize_t s2 = ::send(_socketFd, &networkSize, sizeof(uint32_t), 0);
-  if (s2 < 0)
+  if (s2 < 0) {
     return;
+  }
+
   //   Send the Payload Data(
   //   Only if there is actually data to send) if (payloadSize > 0)
   if (payloadSize > 0) {
     // You already have the raw bytes thanks to your message.data() getter!
     ssize_t s3 = ::send(_socketFd, message.data(), message.size(), 0);
-    if (s3 < 0)
+    if (s3 < 0) {
       return;
+    }
   }
 }
 
-void Client::update() {}
+void Client::update() {
+  std::queue<Message> localQueue;
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    localQueue.swap(_inbox);
+  }
+  // now I can work on the localqueue
+  while (!localQueue.empty()) {
+    Message msg = localQueue.front();
+    localQueue.pop();
+    int type = msg.type();
+    auto it = _actions.find(type);
+    if (it != _actions.end()) {
+      it->second(msg);
+    } else {
+      // Optional: Log that an unknown message type was received
+      std::cout << "[Client] Unhandled message type: " << msg.type() << "\n";
+    }
+  }
+}

@@ -12,7 +12,7 @@ class Message {
 private:
   int _type;
   std::vector<uint8_t> _buffer;
-  size_t _readPos;
+  mutable size_t _readPos;
 
 public:
   // to make compatible with the subject
@@ -41,7 +41,7 @@ public:
   }
 
   // Deserialization (Reading FROM the buffer)
-  template <typename T> Message &operator>>(T &data) {
+  template <typename T> const Message &operator>>(T &data) const {
     // prevent crashes - see above remark
     static_assert(std::is_trivially_copyable<T>::value,
                   "Data must be trivially copyable");

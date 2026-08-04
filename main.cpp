@@ -528,21 +528,22 @@ int main() {
   std::cout << "\n\n================================\n";
   std::cout << "============ PersistentWorker ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
+  {
+    PersistentWorker worker;
 
-  PersistentWorker worker;
+    auto task1 = []() { threadSafeCout << "Executing Task 1" << std::endl; };
 
-  auto task1 = []() { threadSafeCout << "Executing Task 1" << std::endl; };
+    auto task2 = []() { threadSafeCout << "Executing Task 2" << std::endl; };
 
-  auto task2 = []() { threadSafeCout << "Executing Task 2" << std::endl; };
+    worker.addTask("Task1", task1);
+    worker.addTask("Task2", task2);
 
-  worker.addTask("Task1", task1);
-  worker.addTask("Task2", task2);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+    worker.removeTask("Task1");
 
-  worker.removeTask("Task1");
-
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
 
   // --------------------- Message ---------------------
   std::cout << "\n\n================================\n";
