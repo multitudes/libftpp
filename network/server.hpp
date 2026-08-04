@@ -13,24 +13,22 @@
 
 class Server {
 private:
-  std::vector<struct pollfd> _pollfds;
+  std::mutex _mutex;
+  int _serverSocketFd;
   std::atomic<bool> _isRunning;
+  // guaranteeing everyone gets a
+  // unique ID.
+  long long _nextClientID = 1;
+  // keep track of clientID to fds
+  std::map<long long, int> clientList;
+  // the poll array
+  std::vector<struct pollfd> _pollFds;
+  std::unique_ptr<Thread> _listenerThread;
+  //   Stores both the sender's ID and the message
+  std::queue<std::pair<long long, Message>> _inbox;
   std::map<Message::Type,
            std::function<void(long long &clientID, const Message &msg)>>
       _actions;
-  std::unique_ptr<Thread> _listenerThread;
-  std::mutex _mutex;
-  int _serverSocketFd;
-  // keep track of clientID to fds
-  std::map<long long, int> clientList;
-
-  // increments every time a new user connects, guaranteeing everyone gets a
-  // unique ID.
-  long long _nextClientID = 1;
-  //   Stores both the sender's ID and the message
-  std::queue<std::pair<long long, Message>> _inbox;
-  // the poll array
-  std::vector<struct pollfd> _pollFds;
 
 public:
   Server();

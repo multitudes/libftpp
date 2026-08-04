@@ -592,27 +592,66 @@ int main() {
   int data = 0;
   msg >> data;
 
-  // --------------------- Client ---------------------
+  // --------------------- Client&Server ---------------------
   std::cout << "\n\n================================\n";
-  std::cout << "============ Client ===========\n";
+  std::cout << "============ Client&Server ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
+  // ---------------------------------------------------------
+  // 1. SETUP AND START THE SERVER
+  // ---------------------------------------------------------
+  Server server;
+
+  server.defineAction(1, [&server](long long &clientID, const Message &msg) {
+    int value;
+    msg >> value;
+    std::cout << "[Server] Received an int " << value << " from client "
+              << clientID << "\n";
+
+    // Send back a message of type 3 with double the value
+    Message replyMsg(3);
+    replyMsg << (value * 2);
+    server.sendTo(replyMsg, clientID);
+  });
+
+  server.defineAction(2, [](long long &clientID, const Message &msg) {
+    size_t length;
+    std::string text;
+    msg >> length;
+    text.reserve(length);
+    for (size_t i = 0; i < length; ++i) {
+      char c;
+      msg >> c;
+      text.push_back(c);
+    }
+    std::cout << "[Server] Received a string '" << text << "' of length "
+              << length << " from client " << clientID << "\n";
+  });
+
+  server.start(8080);
+
+  // Give the server thread a tiny fraction of a second to bind the port
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  // ---------------------------------------------------------
+  // 2. SETUP AND CONNECT THE CLIENT
+  // ---------------------------------------------------------
   Client client;
 
   client.defineAction(3, [](const Message &msg) {
     int doubledValue;
     msg >> doubledValue;
-    threadSafeCout << "Received a doubled value: " << doubledValue << std::endl;
+    std::cout << "[Client] Received a doubled value: " << doubledValue << "\n";
   });
 
-  // Connect to the server
   client.connect("localhost", 8080);
 
-  // Send a message of type 1 (int)
+  // ---------------------------------------------------------
+  // 3. SEND TEST MESSAGES
+  // ---------------------------------------------------------
   Message message1(1);
   message1 << 42;
   client.send(message1);
 
-  // Send a message of type 2 (size_t followed by characters)
   Message message2(2);
   std::string str = "Hello";
   message2 << str.size();
@@ -621,16 +660,19 @@ int main() {
   }
   client.send(message2);
 
+  // ---------------------------------------------------------
+  // 4. UNIFIED UPDATE LOOP
+  // ---------------------------------------------------------
   bool quit = false;
-
   while (!quit) {
+    // Update both the server and the client!
+    server.update();
     client.update();
 
-    threadSafeCout << "Client updated." << std::endl;
-    threadSafeCout << "Available operations :" << std::endl;
-    threadSafeCout << " - [Q]uit : close the program" << std::endl;
-    threadSafeCout << " - Any other input to continue updating the client"
-                   << std::endl;
+    std::cout << "\n--- System Updated ---\n";
+    std::cout << "Available operations :\n";
+    std::cout << " - [Q]uit : close the program\n";
+    std::cout << " - Any other input to continue updating\n> ";
 
     std::string input;
     std::getline(std::cin, input);
@@ -643,7 +685,6 @@ int main() {
     }
   }
 
-  // Disconnect from the server
   client.disconnect();
 
   std::cout << "\n\n================================\n";

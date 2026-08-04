@@ -61,7 +61,7 @@ void Client::connect(const std::string &address, const size_t &port) {
 void Client::_listenLoop() {
   while (_isConnected) {
     int type;
-    size_t bytes = ::recv(_socketFd, &type, sizeof(int), 0);
+    ssize_t bytes = ::recv(_socketFd, &type, sizeof(int), 0);
 
     if (bytes < 0)
       continue;
@@ -73,11 +73,10 @@ void Client::_listenLoop() {
 
     // Read the Payload Size (4 bytes) - this is not in the subj but cannot
     // be done without. like the content_length in http...
-    size_t payloadSize = 0;
-    bytes = ::recv(_socketFd, &payloadSize, sizeof(size_t), 0);
-    if (bytes < 0)
-      continue;
-    if (bytes == 0) {
+    uint32_t payloadSize = 0;
+    bytes = ::recv(_socketFd, &payloadSize, sizeof(uint32_t), 0);
+
+    if (bytes <= 0) {
       _isConnected = false;
       break;
     }
