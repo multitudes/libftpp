@@ -1822,3 +1822,7 @@ You just need to repeat this process for the other three corners (`bottom_right`
 
 Do you want to write those out, or should we look at how to smoothly blend these four dot products together using the `fade` and `lerp` mathematical functions?
 
+
+# Bonuses
+
+## The .ppm Portable PixMap

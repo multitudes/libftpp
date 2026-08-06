@@ -882,7 +882,19 @@ int main() {
     }
     std::cout << std::endl;
   }
+  {
+    // --------------------- PPMImageExporter ---------------------
+    std::cout << "\n\n================================\n";
+    std::cout << "============ PPMImageExporter ===========\n";
+    std::cout << "=== 1. Starting ===\n\n";
+    PerlinNoise2D perlin(42);
 
+    // Create an exporter for a 500x500 pixel image
+    PPMImageExporter exporter("terrain_map.ppm", 500, 500);
+
+    // Generate it!
+    exporter.generateTerrain(perlin, 0.03f);
+  }
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";
   return 0;
