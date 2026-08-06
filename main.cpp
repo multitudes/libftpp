@@ -895,6 +895,42 @@ int main() {
     // Generate it!
     exporter.generateTerrain(perlin, 0.03f);
   }
+
+  // --------------------- ObservableValue ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ ObservableValue ===========\n";
+  std::cout << "--- Testing ObservableValue ---" << std::endl;
+  {
+
+    // 1. Create our observable variable starting at 100
+    ObservableValue<int> playerHealth(100);
+
+    // 2. Subscribe the UI System
+    // (Using a lambda function for a quick, inline callback)
+    playerHealth.subscribe([](const int &newHealth) {
+      std::cout << "[UI System] Health Bar updated to: " << newHealth << " HP"
+                << std::endl;
+    });
+
+    // 3. Subscribe the Audio System
+    // (It only reacts if health drops dangerously low)
+    playerHealth.subscribe([](const int &newHealth) {
+      if (newHealth <= 20) {
+        std::cout
+            << "[Audio System] PLAYING DANGER SIREN! Heartbeat sound fast!"
+            << std::endl;
+      }
+    });
+
+    std::cout << "\nPlayer takes 10 damage..." << std::endl;
+    playerHealth.set(90); // Triggers UI update
+
+    std::cout << "\nPlayer finds a small potion..." << std::endl;
+    playerHealth = 95; // Uses our overloaded operator to trigger UI update
+
+    std::cout << "\nPlayer steps on a massive trap!" << std::endl;
+    playerHealth = 15; // Triggers BOTH the UI update AND the Audio siren!
+  }
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";
   return 0;
