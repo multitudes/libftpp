@@ -27,7 +27,8 @@ SRCS        =  data_structures/data_buffer.cpp design_patterns/memento.cpp \
 				iostream/thread_safe_iostream.cpp thread/thread.cpp \
 				thread/worker_pool.cpp thread/persistent_worker.cpp \
 				network/message.cpp network/client.cpp network/server.cpp \
-				network/server.cpp
+				network/server.cpp mathematics/ivector2.cpp mathematics/ivector3.cpp \
+				mathematics/random_2D_coordinate_generator.cpp
 
 OBJS        = $(SRCS:.cpp=.o)
 

@@ -687,6 +687,177 @@ int main() {
 
   client.disconnect();
 
+  // --------------------- IVECTOR2 ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ IVECTOR2 ===========\n";
+  std::cout << "=== 1. Starting ===\n\n";
+
+  IVector2<int> vec1(3, 4);
+  IVector2<int> vec2(1, 2);
+
+  std::cout << "Vec1 : " << vec1.x << " / " << vec1.y << std::endl;
+  std::cout << "Vec2 : " << vec2.x << " / " << vec2.y << std::endl;
+
+  // Test operator overloads
+  auto vecAdd = vec1 + vec2;
+  std::cout << "vec1 + vec2 = (" << vecAdd.x << ", " << vecAdd.y << ")"
+            << std::endl;
+  // Expected: vec1 + vec2 = (4, 6)
+
+  auto vecSub = vec1 - vec2;
+  std::cout << "vec1 - vec2 = (" << vecSub.x << ", " << vecSub.y << ")"
+            << std::endl;
+  // Expected: vec1 - vec2 = (2, 2)
+
+  auto vecMul = vec1 * vec2;
+  std::cout << "vec1 * vec2 = (" << vecMul.x << ", " << vecMul.y << ")"
+            << std::endl;
+  // Expected: vec1 * vec2 = (3, 8)
+
+  auto vecDiv = vec1 / vec2;
+  std::cout << "vec1 / vec2 = (" << vecDiv.x << ", " << vecDiv.y << ")"
+            << std::endl;
+  // Expected: vec1 / vec2 = (3, 2)
+
+  bool isEqual = vec1 == vec2;
+  std::cout << "vec1 == vec2: " << (isEqual ? "true" : "false") << ""
+            << std::endl;
+  // Expected: vec1 == vec2: false
+
+  bool isNotEqual = vec1 != vec2;
+  std::cout << "vec1 != vec2: " << (isNotEqual ? "true" : "false") << ""
+            << std::endl;
+  // Expected: vec1 != vec2: true
+
+  // Test additional methods
+  float len = vec1.length();
+  std::cout << "Length of vec1: " << len << "" << std::endl;
+  // Expected: Length of vec1: 5 (or sqrt(3*3 + 4*4))
+
+  auto normVec = vec1.normalize();
+  std::cout << "Normalized vec1 = (" << normVec.x << ", " << normVec.y << ")"
+            << std::endl;
+  // Expected: Normalized vec1 = (0.6, 0.8)
+
+  float dotProd = vec1.dot(vec2);
+  std::cout << "Dot product of vec1 and vec2: " << dotProd << "" << std::endl;
+  // Expected: Dot product of vec1 and vec2: 11 (or 3*1 + 4*2)
+
+  auto crossProd = vec1.cross();
+  std::cout << "Cross product of vec1: (" << crossProd.x << ", " << crossProd.y
+            << ")" << std::endl;
+  // Expected: Cross product of vec1: (some_value, some_value)
+
+  // --------------------- IVECTOR3 ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ IVECTOR3 ===========\n";
+  std::cout << "=== 1. Starting ===\n\n";
+  {
+
+    IVector3<int> vec1(3, 4, 1);
+    IVector3<int> vec2(1, 2, 3);
+
+    std::cout << "Vec1 : " << vec1.x << " / " << vec1.y << " / " << vec1.z
+              << std::endl;
+    std::cout << "Vec2 : " << vec2.x << " / " << vec2.y << " / " << vec2.z
+              << std::endl;
+
+    // Test operator overloads
+    auto vecAdd = vec1 + vec2;
+    std::cout << "vec1 + vec2 = (" << vecAdd.x << ", " << vecAdd.y << ", "
+              << vecAdd.z << ")" << std::endl;
+    // Expected: vec1 + vec2 = (4, 6, 4)
+
+    auto vecSub = vec1 - vec2;
+    std::cout << "vec1 - vec2 = (" << vecSub.x << ", " << vecSub.y << ", "
+              << vecSub.z << ")" << std::endl;
+    // Expected: vec1 - vec2 = (2, 2, -2)
+
+    auto vecMul = vec1 * vec2;
+    std::cout << "vec1 * vec2 = (" << vecMul.x << ", " << vecMul.y << ", "
+              << vecMul.z << ")" << std::endl;
+    // Expected: vec1 * vec2 = (3, 8, 3)
+
+    auto vecDiv = vec1 / vec2;
+    std::cout << "vec1 / vec2 = (" << vecDiv.x << ", " << vecDiv.y << ", "
+              << vecDiv.z << ")" << std::endl;
+    // Expected: vec1 / vec2 = (3, 2, 0)
+
+    bool isEqual = vec1 == vec2;
+    std::cout << "vec1 == vec2: " << (isEqual ? "true" : "false") << std::endl;
+    // Expected: vec1 == vec2: false
+
+    bool isNotEqual = vec1 != vec2;
+    std::cout << "vec1 != vec2: " << (isNotEqual ? "true" : "false")
+              << std::endl;
+    // Expected: vec1 != vec2: true
+
+    // Test additional methods
+    float len = vec1.length();
+    std::cout << "Length of vec1: " << len << std::endl;
+    // Expected: Length of vec1: 5.099 (or sqrt(3*3 + 4*4 + 1*1))
+
+    auto normVec = vec1.normalize();
+    std::cout << "Normalized vec1 = (" << normVec.x << ", " << normVec.y << ", "
+              << normVec.z << ")" << std::endl;
+    // Expected: Normalized vec1 = (some_value, some_value, some_value)
+
+    float dotProd = vec1.dot(vec2);
+    std::cout << "Dot product of vec1 and vec2: " << dotProd << std::endl;
+    // Expected: Dot product of vec1 and vec2: 14 (or 3*1 + 4*2 + 1*3)
+
+    auto crossProd = vec1.cross(vec2);
+    std::cout << "Cross product of vec1 and vec2: (" << crossProd.x << ", "
+              << crossProd.y << ", " << crossProd.z << ")" << std::endl;
+    // Expected: Cross product of vec1 and vec2: (some_value, some_value,
+    // some_value)
+  }
+
+  // --------------------- Random2DCoordinateGenerator ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Random2DCoordinateGenerator ===========\n";
+  std::cout << "=== 1. Starting ===\n\n";
+  Random2DCoordinateGenerator randomGenerator(1);
+
+  // Store a list of coordinates to test
+  std::vector<std::pair<long long, long long>> coordinates = {
+      {5, 3}, {7, 2}, {1, 9}, {0, 0}};
+
+  // Store the random numbers generated the first time
+  std::vector<long long> firstGenerated;
+
+  std::cout << "First round of generation:" << std::endl;
+  for (const auto &coord : coordinates) {
+    long long x = coord.first;
+    long long y = coord.second;
+    long long randomNumber = randomGenerator(x, y);
+    firstGenerated.push_back(randomNumber);
+    std::cout << "Random number using coordinates (" << x << ", " << y
+              << "): " << randomNumber << std::endl;
+  }
+  std::cout << std::endl;
+
+  std::cout << "Second round of generation:" << std::endl;
+  for (size_t i = 0; i < coordinates.size(); ++i) {
+    long long x = coordinates[i].first;
+    long long y = coordinates[i].second;
+    long long randomNumber = randomGenerator(x, y);
+
+    std::cout << "Random number using coordinates (" << x << ", " << y
+              << "): " << randomNumber << std::endl;
+
+    // Check if the number is the same as generated the first time
+    if (randomNumber == firstGenerated[i]) {
+      std::cout << "  => Matches the previous generated value. Consistent!"
+                << std::endl; // Expected: Should always match
+    } else {
+      std::cout
+          << "  => Does not match the previous generated value. Inconsistent!"
+          << std::endl;
+    }
+  }
+  std::cout << std::endl;
+
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";
   return 0;

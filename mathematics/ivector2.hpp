@@ -1,43 +1,52 @@
 #pragma once
 
-template <typename TType> struct Vector {
+#include <cmath>
+
+template <typename TType> struct IVector2 {
   TType x;
   TType y;
 
-  Vector<TType>(TType x, TType y) : x(x), y(y) {}
-  Vector<TType>() : x(), y() {}
-  ~Vector<TType>() {}
+  IVector2<TType>(TType x, TType y) : x(x), y(y) {}
+  IVector2<TType>() : x(), y() {}
+  ~IVector2<TType>() {}
 
-  // +,-, *, /, ==, !=.
-  Vector<TType> operator+(const Vector<TType> other) {
-    return Vector<TType>(x + other.x, y + other.y);
+  // Pass by const reference (&) to avoid copying!
+  IVector2<TType> operator+(const IVector2<TType> &other) const {
+    return IVector2<TType>(x + other.x, y + other.y);
   }
-  Vector<TType> operator-(const Vector<TType> other) {
-    return Vector<TType>(x - other.x, y - other.y);
+  IVector2<TType> operator-(const IVector2<TType> &other) const {
+    return IVector2<TType>(x - other.x, y - other.y);
   }
-  TType operator*(const Vector<TType> other) {
-    return Vector<TType>(x * other.x, y * other.y);
+  IVector2<TType> operator*(const IVector2<TType> &other) const {
+    return IVector2<TType>(x * other.x, y * other.y);
   }
-  TType operator/(const Vector<TType> other) {
-    return Vector<TType>(x / other.x, y / other.y);
+  IVector2<TType> operator/(const IVector2<TType> &other) const {
+    return IVector2<TType>(x / other.x, y / other.y);
   }
-  bool operator==(const Vector<TType> other) {
+  bool operator==(const IVector2<TType> &other) const {
     return x == other.x && y == other.y;
   }
-  bool operator!=(const Vector<TType> other) {
+  bool operator!=(const IVector2<TType> &other) const {
     return x != other.x || y != other.y;
   }
 
-  // additional methods
-  // Expected: Length of vec1: 5 (or sqrt(3*3 + 4*4))
-  TType length() {};
+  float length() const { return std::sqrt(x * x + y * y); }
 
-  // Expected: Normalized vec1 = (0.6, 0.8)
-  Vector<TType> normalize() {};
+  IVector2<float> normalize() const {
+    // Strictly use float here so we don't lose precision
+    float len = length();
+    if (len == 0.0f)
+      return IVector2<float>(0.0f, 0.0f);
 
-  // Expected: Dot product of vec1 and vec2: 11 (or 3*1 + 4*2)
-  TType dot(Vector<TType> other) { return x * other.x + y * other.y; };
+    // Cast x and y to floats before dividing to ensure precise decimal math
+    return IVector2<float>(static_cast<float>(x) / len,
+                           static_cast<float>(y) / len);
+  }
 
-  // probably they mean the normal
-  Vector<TType> cross() { return Vector<TType>(-x, y); };
+  float dot(const IVector2<TType> &other) const {
+    return static_cast<float>(x * other.x + y * other.y);
+  }
+
+  // this is just returning the normal to the vector
+  IVector2<TType> cross() const { return IVector2<TType>(-y, x); }
 };
