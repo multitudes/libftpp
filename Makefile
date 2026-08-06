@@ -28,7 +28,7 @@ SRCS        =  data_structures/data_buffer.cpp design_patterns/memento.cpp \
 				thread/worker_pool.cpp thread/persistent_worker.cpp \
 				network/message.cpp network/client.cpp network/server.cpp \
 				network/server.cpp mathematics/ivector2.cpp mathematics/ivector3.cpp \
-				mathematics/random_2D_coordinate_generator.cpp perlin_noise_2D.cpp
+				mathematics/random_2D_coordinate_generator.cpp mathematics/perlin_noise_2D.cpp
 
 OBJS        = $(SRCS:.cpp=.o)
 

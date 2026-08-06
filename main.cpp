@@ -858,6 +858,31 @@ int main() {
   }
   std::cout << std::endl;
 
+  // --------------------- PerlinNoise2D ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ PerlinNoise2D ===========\n";
+  std::cout << "=== 1. Starting ===\n\n";
+  PerlinNoise2D perlin;
+
+  const int gridSize = 40;
+  char visualChars[] = {' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'};
+
+  std::cout << "Sampling 2D Perlin noise over a " << gridSize << "x" << gridSize
+            << " grid:" << std::endl
+            << std::endl;
+
+  for (int y = 0; y < gridSize; ++y) {
+    for (int x = 0; x < gridSize; ++x) {
+      float sample =
+          perlin.sample(x * 0.3f, y * 0.3f);  // Adjust these factors as needed
+      sample = (sample + 1) / 2;              // Map from [-1, 1] to [0, 1]
+      int charIndex = std::round(sample * 9); // Map from [0, 1] to [0, 9]
+
+      std::cout << visualChars[charIndex] << " ";
+    }
+    std::cout << std::endl;
+  }
+
   std::cout << "\n\n================================\n";
   std::cout << "============ ENDING ===========\n";
   return 0;

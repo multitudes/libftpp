@@ -3,15 +3,16 @@
 #include "random_2D_coordinate_generator.hpp"
 #include <cmath>
 
-PerlinNoise2D::PerlinNoise2D(long long seed) {
-  Random2DCoordinateGenerator _generator = Random2DCoordinateGenerator(seed);
-}
+PerlinNoise2D::PerlinNoise2D(long long seed) : _generator(seed) {}
 
 PerlinNoise2D ::~PerlinNoise2D() {}
 
+float fade(float t) { return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f); }
+
+float lerp(float a, float b, float t) { return a + t * (b - a); }
+
 // Returns a perlin noise value for the provided coordinates.
-float PerlinNoise2D::sample(float x, float y) const {}
-float PerlinNoise2D::operator()(const float &x, const float &y) const {
+float PerlinNoise2D::sample(float x, float y) const {
   long long X = static_cast<long long>(std::floor(x));
   long long Y = static_cast<long long>(std::floor(y));
 
@@ -40,11 +41,11 @@ float PerlinNoise2D::operator()(const float &x, const float &y) const {
   float bottom_left_angle =
       (_generator(bottom_left.x, bottom_left.y) % 360) * 3.14159265f / 180.0f;
   float bottom_right_angle =
-      (_generator(bottom_left.x, bottom_left.y) % 360) * 3.14159265f / 180.0f;
+      (_generator(bottom_right.x, bottom_right.y) % 360) * 3.14159265f / 180.0f;
   float upper_left_angle =
-      (_generator(bottom_left.x, bottom_left.y) % 360) * 3.14159265f / 180.0f;
+      (_generator(upper_left.x, upper_left.y) % 360) * 3.14159265f / 180.0f;
   float upper_right_angle =
-      (_generator(bottom_left.x, bottom_left.y) % 360) * 3.14159265f / 180.0f;
+      (_generator(upper_right.x, upper_right.y) % 360) * 3.14159265f / 180.0f;
   // get the random direction vectors
   IVector2<float> bottom_left_gradient(std::cos(bottom_left_angle),
                                        std::sin(bottom_left_angle));
@@ -57,7 +58,22 @@ float PerlinNoise2D::operator()(const float &x, const float &y) const {
   // get the dot product by comparing that random arrow to the distance vector
   // we calculated earlier(first)
   float bottom_left_dot = bottom_left_gradient.dot(first);
-  float bottom_right_dot = bottom_right_gradient.dot(first);
-  float upper_left_dot = upper_left_gradient.dot(first);
-  float upper_right_dot = bottom_right_gradient.dot(first);
+  float bottom_right_dot = bottom_right_gradient.dot(second);
+  float upper_left_dot = upper_left_gradient.dot(third);
+  float upper_right_dot = upper_right_gradient.dot(fourth);
+  // fade
+  float u = fade(local_coord.x);
+  float v = fade(local_coord.y);
+  // Blend the bottom corners
+  float x1 = lerp(bottom_left_dot, bottom_right_dot, u);
+
+  // Blend the top corners
+  float x2 = lerp(upper_left_dot, upper_right_dot, u);
+
+  // Blend the results together to get your final noise value!
+  return lerp(x1, x2, v);
+}
+
+float PerlinNoise2D::operator()(const float &x, const float &y) const {
+  return sample(x, y);
 }
