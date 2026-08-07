@@ -9,7 +9,7 @@
 NAME        = libftpp.a
 
 CXX         = c++
-CXXFLAGS    = -Wall -Wextra -Werror -std=c++11
+CXXFLAGS    = -Wall -Wextra -Werror -std=c++14
 
 # Debugging flags (Uncomment or move to a dev rule if needed)
 CXXFLAGS   += -g3 -O0
@@ -29,7 +29,7 @@ SRCS        =  data_structures/data_buffer.cpp design_patterns/memento.cpp \
 				network/message.cpp network/client.cpp network/server.cpp \
 				network/server.cpp mathematics/ivector2.cpp mathematics/ivector3.cpp \
 				mathematics/random_2D_coordinate_generator.cpp mathematics/perlin_noise_2D.cpp \
-				bonus/ppm_image_exporter.cpp
+				bonus/ppm_image_exporter.cpp bonus/timer.cpp bonus/chronometer.cpp
 
 
 OBJS        = $(SRCS:.cpp=.o)

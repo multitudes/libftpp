@@ -1,9 +1,11 @@
 #pragma once
 
 #include "thread/persistent_worker.hpp"
+#include <chrono>
 #include <exception>
 #include <iostream>
 #include <string>
+#include <thread>
 
 // =============================================================================
 // Dummy Class to test our Pool
@@ -76,7 +78,7 @@ public:
 };
 
 // =========================================================================
-// 1. The Custom Event Struct
+// The Custom Event Struct
 // =========================================================================
 struct PlayerEvent {
   int eventType; // used like enum
@@ -1282,5 +1284,166 @@ void observable_value_test() {
 
     std::cout << "\nPlayer steps on a massive trap!" << std::endl;
     playerHealth = 15; // Triggers BOTH the UI update AND the Audio siren!
+  }
+}
+
+void timer_test() {
+  // --------------------- Timer ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Timer ===========\n" << std::endl;
+
+  // Set a timer for 1 second (1000 ms)
+  Timer myTimer(1000);
+
+  std::cout << "Timer set. Waiting for timeout..." << std::endl;
+
+  while (!myTimer.hasTimedOut()) {
+    std::cout << "." << std::flush; // flush ensures it prints immediately
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(100)); // Sleep for 1/10th of a sec
+  }
+
+  std::cout << "BEEP! Timer has timed out!" << std::endl;
+}
+
+void chronometer_test() {
+  // --------------------- chronometer ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ chronometer ===========\n" << std::endl;
+  Chronometer chrono;
+
+  chrono.start();
+  std::cout << "Chronometer started. Doing some 'heavy' work..." << std::endl;
+
+  // Simulate doing something that takes time (e.g., 1.5 seconds)
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+  chrono.stop();
+  std::cout << "Work finished!" << std::endl;
+  std::cout << "Elapsed time: " << chrono.getElapsedSeconds()
+            << " seconds.\n\n";
+}
+
+// for the command pattern
+// --- Receiver Class 1 ---
+class PlayerReceiver {
+public:
+  void jump() { std::cout << "[Player] Jumped into the air!" << std::endl; }
+};
+
+// --- Receiver Class 2 ---
+class AudioSystemReceiver {
+public:
+  void playJumpSound() {
+    std::cout << "[Audio] PLAYING: 'boing.wav'" << std::endl;
+  }
+};
+void command_pattern_test() {
+  // --------------------- Templated Command Pattern ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Templated Command Pattern ===========\n"
+            << std::endl;
+
+  // 1. Create our two entirely different objects
+  PlayerReceiver myPlayer;
+  AudioSystemReceiver myAudio;
+
+  // 2. Create a single queue that holds base Command pointers
+  std::vector<std::unique_ptr<Command>> commandQueue;
+
+  // 3. Wrap functions from DIFFERENT classes and push them to the SAME queue
+  // Notice how we specify <Player> and pass &Player::jump
+  commandQueue.push_back(std::make_unique<SimpleCommand<PlayerReceiver>>(
+      &myPlayer, &PlayerReceiver::jump));
+
+  // Notice how we specify <AudioSystem> and pass &AudioSystem::playJumpSound
+  commandQueue.push_back(std::make_unique<SimpleCommand<AudioSystemReceiver>>(
+      &myAudio, &AudioSystemReceiver::playJumpSound));
+
+  // 4. The queue doesn't care what they are, it just executes them!
+  std::cout << "Executing queue...\n\n";
+  for (const auto &cmd : commandQueue) {
+    cmd->execute(); // Automatically calls the right function on the right
+                    // object
+  }
+}
+
+void lambda_command_test() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============= Lambda Command Queue ============\n" << std::endl;
+
+  PlayerReceiver myPlayer;
+  AudioSystemReceiver myAudio;
+
+  std::vector<std::unique_ptr<Command>> commandQueue;
+
+  // 1. Wrap the Player jump in a Lambda
+  // [&myPlayer] means "capture myPlayer by reference so we can use it inside"
+  commandQueue.push_back(
+      std::make_unique<LambdaCommand>([&myPlayer]() { myPlayer.jump(); }));
+
+  // 2. Wrap the Audio sound in a Lambda
+  commandQueue.push_back(std::make_unique<LambdaCommand>(
+      [&myAudio]() { myAudio.playJumpSound(); }));
+
+  // 3. The true power of Lambdas: We can pass arguments instantly!
+  // The Wikipedia version couldn't do this without massive rewrites.
+  int damage = 50;
+  commandQueue.push_back(std::make_unique<LambdaCommand>([damage]() {
+    std::cout << "[System] Dealt " << damage << " damage using a lambda!"
+              << std::endl;
+  }));
+
+  // 4. Execute the queue
+  std::cout << "Executing lambda queue...\n\n";
+  for (const auto &cmd : commandQueue) {
+    cmd->execute();
+  }
+}
+class GameEngine {
+public:
+  // Signature 1: Takes NO arguments, returns void
+  void saveGame() { std::cout << "Game saved." << std::endl; }
+
+  // Signature 2: Takes TWO arguments (string, float), returns void
+  void playMusic(std::string track, float volume) {
+    std::cout << "Playing " << track << " at volume " << volume << std::endl;
+  }
+
+  // Signature 3: Takes ONE argument (int), returns an INT!
+  int calculateDamage(int baseDamage) {
+    std::cout << "Calculated damage: " << baseDamage * 2 << std::endl;
+    return baseDamage * 2;
+  }
+};
+
+void mixed_signature_test() {
+  GameEngine engine;
+  std::vector<std::unique_ptr<Command>> queue;
+
+  // 1. Wrapping a zero-argument function
+  queue.push_back(
+      std::make_unique<LambdaCommand>([&engine]() { engine.saveGame(); }));
+
+  // 2. Wrapping a two-argument function!
+  // We just capture the arguments right here in the lambda.
+  queue.push_back(std::make_unique<LambdaCommand>(
+      [&engine]() { engine.playMusic("boss_theme.mp3", 0.8f); }));
+
+  // 3. Wrapping a function that takes arguments AND returns a value!
+  // The queue doesn't care that it returns an int, the lambda just eats the
+  // return value.
+  queue.push_back(std::make_unique<LambdaCommand>([&engine]() {
+    int result = engine.calculateDamage(50);
+    // We can even do extra logic inside the lambda!
+    if (result > 90)
+      std::cout << "Critical Hit!\n";
+  }));
+
+  // 4. The queue executes them all blindly.
+  // It has NO IDEA that they have different signatures underneath.
+  std::cout << "Executing Mixed Queue...\n";
+  for (const auto &cmd : queue) {
+    cmd->execute();
   }
 }

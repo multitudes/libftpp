@@ -1841,3 +1841,718 @@ Do you want to write those out, or should we look at how to smoothly blend these
 # Bonuses
 
 ## The .ppm Portable PixMap
+
+## timer
+That is a very sharp question! It shows you have been paying close attention to modern C++ best practices, where C-style casts like `(int)x` are strongly discouraged in favor of `static_cast`.
+
+However, in this specific case, **what we wrote is not actually a cast at all!**
+
+Here is the breakdown of why `std::chrono::milliseconds(duration_ms)` is the correct approach and why `static_cast` isn't needed here.
+
+### Constructor Call vs. Type Casting
+
+`std::chrono::milliseconds` is not a primitive data type (like `int` or `float`). It is a full-fledged **class** (specifically, it's a template class under the hood).
+
+When we write `std::chrono::milliseconds(duration_ms)`, we are actually **calling the constructor** of that class and passing `duration_ms` as the argument. We are telling C++: *"Take this raw `long long` number and build a new `milliseconds` object out of it."*
+
+Using `static_cast` is meant for converting between two compatible types (like converting a `float` to an `int`, or casting pointers). While you *can* technically write `static_cast<std::chrono::milliseconds>(duration_ms)`, it is considered unidiomatic because you aren't converting a primitive; you are constructing an object.
+
+### The Modern C++ Alternative: Brace Initialization
+
+If you want to make your code look even more robust and modern, the absolute best practice in C++11 and beyond is to use **Uniform Initialization** (curly braces) for constructors.
+
+You can change that line to use curly braces like this:
+
+```cpp
+Timer(long long duration_ms) 
+    : _duration{std::chrono::milliseconds{duration_ms}} { // <-- Look at the curly braces!
+    reset(); 
+}
+
+```
+
+**Why are curly braces better?**
+Curly braces prevent "narrowing conversions." If you accidentally tried to pass a `float` into a constructor that only accepts integers, the curly braces will force the compiler to throw an error, whereas parentheses will silently chop off the decimals and compile anyway.
+
+So, stick with the constructor call, but feel free to upgrade those parentheses to curly braces for maximum C++ safety!You hit the absolute nail on the head.
+
+Right now, the `Timer` we wrote is a **Polling Timer**. This means it just sits there passively, and it relies on you (the programmer) to constantly ask it, *"Are you done yet? Are you done yet?"*
+
+This is actually exactly what the subject asked for (*"Allows you to set a duration and check if it has timed out"*), and it is how timers usually work inside a video game loop where you are already redrawing the screen 60 times a second anyway.
+
+However, in standard software (like a web browser or a mobile app), you are exactly right: we usually want an **Event-Driven Timer** (or asynchronous timer). We want to say, *"Wait 5 seconds, and then trigger this function automatically,"* so our main code can go do other things.
+
+Since you just learned about `std::function` when building your `ObservableValue` class, you actually have all the knowledge needed to build an auto-alerting timer!
+
+### How to make an Auto-Alerting Timer
+
+To do this, we combine `std::function` (the callback alert) with `std::thread` (to count the time in the background without freezing your main program).
+
+Here is what an upgraded, asynchronous timer looks like:
+
+```cpp
+#pragma once
+
+#include <chrono>
+#include <functional>
+#include <thread>
+
+class AsyncTimer {
+public:
+    // Starts a background countdown and triggers the alert function when done
+    void start(long long duration_ms, std::function<void()> alert_callback) {
+        // Launch a brand new background thread
+        std::thread([duration_ms, alert_callback]() {
+            
+            // 1. Sleep in the background
+            std::this_thread::sleep_for(std::chrono::milliseconds(duration_ms));
+            
+            // 2. The time has come! Trigger the alert!
+            alert_callback();
+            
+        }).detach(); // .detach() lets the thread run independently in the background
+    }
+};
+
+```
+
+### How you would use it in `main()`:
+
+```cpp
+#include <iostream>
+#include "async_timer.hpp"
+
+int main() {
+    AsyncTimer alarm;
+
+    std::cout << "Setting the alarm for 3 seconds..." << std::endl;
+    
+    // Set it and forget it!
+    alarm.start(3000, []() {
+        std::cout << "\n[BEEP BEEP BEEP] The time has come!" << std::endl;
+    });
+
+    // The main program is not frozen! It can do other things while the timer runs.
+    for (int i = 0; i < 5; ++i) {
+        std::cout << "Main program is doing other work... (" << i << ")" << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
+
+    return 0;
+}
+
+```
+
+If you run this, your program will print "Doing other work..." every second, and exactly at the 3-second mark, the background timer will interrupt and print the alert message!
+
+For your assignment, the simple polling `Timer` is perfect and perfectly fulfills the prompt. But knowing how to launch a background thread to trigger an alert callback puts you on a much higher level of C++ engineering!
+
+### What is `steady_clock`?
+
+In C++, `std::chrono::steady_clock` acts exactly like a **physical stopwatch**.
+
+Its defining feature is that it is **strictly monotonic**. This means the clock can only ever move forward, and it ticks at a perfectly constant rate.
+
+Why is this important? Because your computer's normal time is actually constantly shifting! If you use a normal clock and the user's operating system decides to sync with an internet time server (NTP), or daylight saving time hits, or the user manually changes their time zone, a normal clock might suddenly jump backward by 5 seconds or forward by an hour.
+
+If you were using a normal clock for your `Timer`, and the system time jumped backward by an hour, your 3-second timer would suddenly take 1 hour and 3 seconds to finish! `steady_clock` is completely immune to this. It ignores the real-world time and only measures raw elapsed time.
+
+---
+
+### The Variations of Clocks in C++
+
+Before C++20, there were exactly **three** standard clocks in the `<chrono>` library, each designed for a completely different purpose.
+
+#### 1. `std::chrono::steady_clock` (The Stopwatch)
+
+* **Best for:** Measuring elapsed time, game loops, frame rates, and timeouts.
+* **Behavior:** Never jumps backward. Not tied to real-world dates or times. You cannot ask a `steady_clock` what year or month it is.
+
+#### 2. `std::chrono::system_clock` (The Wall Clock)
+
+* **Best for:** Displaying the time to a user, writing timestamps to a log file, or getting the current date.
+* **Behavior:** Tied to the operating system's real-world time. It *can* jump backward or forward if the system time is updated. It can also be converted to a `time_t` object to print readable calendar dates.
+
+#### 3. `std::chrono::high_resolution_clock` (The Microscope)
+
+* **Best for:** Benchmarking how many nanoseconds a specific algorithm takes to run.
+* **Behavior:** It represents the clock with the absolute shortest tick period available on your specific hardware.
+* **The Catch:** On most modern compilers, `high_resolution_clock` isn't actually a unique clock! It is usually just an alias ("typedef") for either `steady_clock` or `system_clock`, depending on which one the compiler builders thought was faster.
+
+---
+
+### The C++20 Expansion
+
+If you are using a very modern compiler (C++20 or newer), the C++ committee added a few more highly specialized clocks for handling complex global time zones:
+
+* **`std::chrono::utc_clock`**: Tracks Coordinated Universal Time (UTC) and actually accounts for "leap seconds" (the extra seconds scientists occasionally add to the calendar to keep clocks aligned with the Earth's rotation).
+* **`std::chrono::tai_clock`**: International Atomic Time. It is like UTC but ignores leap seconds completely.
+* **`std::chrono::gps_clock`**: Tracks time exactly as the GPS satellite network calculates it.
+* **`std::chrono::file_clock`**: Specifically used for reading the "Last Modified" timestamps on files saved to your hard drive.
+
+For almost all software engineering, game development, and system tools, **`steady_clock`** (for measuring durations) and **`system_clock`** (for getting the date) are the only two you will ever really need!
+
+These are three fantastic, highly-technical questions. Let's break them down one by one, because each touches on a very important quirk of C++.
+
+### 1. The Empty Loop Issue
+
+You are completely right to want to put something inside that loop! If you leave a `while` loop completely empty, two bad things can happen:
+
+1. **CPU Hogging (Busy Waiting):** The loop runs as fast as your processor allows, asking *"Are we there yet?"* millions of times per second. This will instantly spike one of your CPU cores to 100% usage.
+2. **Compiler Optimization:** Sometimes, an aggressive C++ compiler sees a loop that doesn't actually *do* anything and just deletes it entirely to make your code run faster!
+
+Adding a sleep and a print statement is the exact correct solution. However, `std::sleep()` is an old C-style function. In modern C++, you should use `std::this_thread::sleep_for`.
+
+Here is how you fix that loop:
+
+```cpp
+    while (!myTimer.hasTimedOut()) {
+        std::cout << "." << std::flush; // flush ensures it prints immediately
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Sleep for 1/10th of a sec
+    }
+
+```
+
+### 2. Does `_is_running` default to zero?
+
+**No!** This is one of the most famous and dangerous traps in all of C++.
+
+Unlike languages like Java or C#, C++ prioritizes absolute speed. That means when you create a class, C++ grabs a chunk of memory for your variables, but **it does not clean that memory up**.
+
+If you do not explicitly set `_is_running = false`, it will contain "garbage data"—whatever leftover 1s and 0s happened to be sitting in your computer's RAM from the last program that used it. If that garbage data happens to evaluate to a non-zero number, your boolean will accidentally start out as `true`!
+
+*Always* initialize your primitive member variables (bools, ints, floats, pointers) in C++.
+
+*(Note: You can skip the constructor initialization if you use C++11 default member initializers right in your header file, like this: `bool _is_running = false;`)*
+
+### 3. Why `.count()`?
+
+In `<chrono>`, time isn't stored as a simple `float` or `int`. When you subtract `_end_time - _start_time`, C++ returns a highly specific object called a `std::chrono::duration`.
+
+This is actually a safety feature! A `duration` object internally remembers what unit it is using (seconds, milliseconds, nanoseconds). It prevents you from accidentally adding 5 milliseconds to 5 hours and getting "10".
+
+When you write `return elapsed.count();`, you are telling that `duration` object: *"I know you are a complex object, but please just strip away the wrapper and give me the raw, underlying number inside."* Without `.count()`, the compiler will throw an error because it doesn't know how to implicitly convert a `duration` object into a raw `double`.
+
+## command design pattern
+[wikipedia](https://en.wikipedia.org/wiki/Command_pattern)
+
+```c++
+import std;
+
+using std::shared_ptr;
+using std::unique_ptr;
+
+// Abstract command
+class Command {
+protected:
+    Command() = default;
+public:
+    // declares an interface for executing an operation.
+    virtual void execute() = 0;
+    virtual ~Command() = default;
+};
+
+// Concrete command
+template <typename Receiver>
+class SimpleCommand : public Command {
+private:
+    Receiver* receiver;
+    Action action;
+public:
+    using Action = void (Receiver::*)();
+
+    // defines a binding between a Receiver object and an action.
+    SimpleCommand(shared_ptr<Receiver> receiver, Action action):
+        receiver{receiver.get()}, action{action} {}
+
+    SimpleCommand(const SimpleCommand&) = delete;
+    const SimpleCommand& operator=(const SimpleCommand&) = delete;
+
+    // implements execute by invoking the corresponding operation(s) on Receiver.
+    virtual void execute() {
+        (receiver->*action)();
+    }
+};
+
+// Receiver
+class MyClass {
+public:
+    // knows how to perform the operations associated with carrying out a request. Any class may serve as a Receiver.
+    void action() {
+        std::println("MyClass::action called");
+    }
+};
+
+int main(int argc, char* argv[]) {
+    shared_ptr<MyClass> receiver = std::make_shared<MyClass>();
+    // ...
+    unique_ptr<Command> command = std::make_unique<SimpleCommand<MyClass>>(receiver, &MyClass::action);
+    // ...
+    command->execute();
+}
+```
+
+That Wikipedia example is a perfect showcase of why C++ can sometimes look like an alien language! It is entirely normal to find that snippet confusing because it relies on one of the most notoriously tricky syntaxes in C++: **Pointers to Member Functions**.
+
+Here is the fundamental difference:
+
+* **Our approach (Specific Commands):** We wrote a brand-new class (`ModifyMoneyCommand`) where the logic was hardcoded inside the `execute()` method.
+* **Wikipedia's approach (Generic Delegate):** They wrote a *single* templated class (`SimpleCommand`) that acts as a generic wrapper. It allows you to take *any* existing function from *any* class and turn it into a command without having to write a new class every time.
+
+Here is a breakdown of the "magic" happening in the Wikipedia code:
+
+### 1. The Scary Typedef: `using Action = void (Receiver::*)();`
+
+This is a pointer to a member function.
+In normal C++, you can point to a variable. But here, they are pointing to a *function* that belongs to a class (`Receiver`). It translates to: *"Action is a placeholder for any function inside the Receiver class that takes zero arguments and returns void."*
+
+### 2. The Constructor
+
+```cpp
+SimpleCommand(shared_ptr<Receiver> receiver, Action action)
+
+```
+
+When you create this command, you hand it two things:
+
+1. The object you want to modify (e.g., the Player).
+2. The specific function you want it to call later (e.g., `&Player::jump`).
+
+### 3. The Execution: `(receiver->*action)();`
+
+This looks like a typo, but `->*` is an actual C++ operator!
+Because the command doesn't actually know what logic it's performing, it just looks at the object you gave it (`receiver`), looks at the function pointer you gave it (`action`), and fires them together. It essentially says: *"Hey receiver, run whatever function I have saved in my action variable."*
+
+### Which one should you use?
+
+**Use our approach (Specific Commands) if:**
+
+* You need an `undo()` system. (Wikipedia's example does not have an undo function. It is much harder to do generic undo's because every action reverses differently).
+* Your commands need to store extra data (like our `_amount` variable).
+* You prefer readable, easy-to-debug code.
+
+**Use Wikipedia's approach (Generic Commands) if:**
+
+* You are building a UI button system where clicking a button just needs to trigger an existing function (like `Menu::openSettings()`), and you don't want to write 50 different command classes for 50 different buttons.
+
+Since your assignment grades you on providing clear justifications and tests, the custom class approach with the Undo/Redo system is generally a much stronger piece of evidence for your portfolio than a purely generic wrapper.
+
+Does this help demystify what the Wikipedia code is doing, and are you comfortable moving forward with the custom command structure we built?
+
+
+You are reading the code perfectly. You have picked up on the exact nuances of how this specific Wikipedia example is structured, as well as its biggest limitation.
+
+Let’s break down exactly what those pieces mean.
+
+### 1. The Meaning of the `Command` Interface
+
+In C++, an "interface" is just a class filled with pure virtual functions (functions ending in `= 0`).
+
+The only purpose of this `Command` class is to act as a **generic label**. If you want to store a history of commands, you cannot store `SimpleCommand<MyClass>` because tomorrow you might want to store a `SimpleCommand<AudioPlayer>`.
+By making them all inherit from `Command`, you can create a single `std::vector<unique_ptr<Command>>`, and it will happily hold both of them. It guarantees that no matter what the object truly is, it definitely has an `execute()` function you can call.
+
+### 2. Why is the constructor `protected`?
+
+```cpp
+protected:
+    Command() = default;
+
+```
+
+This is a C++ safety idiom.
+Because `Command` is just a generic label (an abstract concept), it makes no sense to create a raw `Command` object. You only want to create specific, concrete commands.
+
+By making the constructor `protected`, you are telling the compiler: *"No one from the outside is allowed to type `Command c;`. The only way to build this is if a child class (like `SimpleCommand`) inherits it and builds it from the inside."*
+
+*(Note: Because `execute()` is set to `= 0`, C++ already physically prevents you from instantiating it, but adding `protected` is considered good documentation to make your intention crystal clear to other programmers).*
+
+### 3. The Zero-Parameter Limitation
+
+You hit the nail on the head.
+
+```cpp
+using Action = void (Receiver::*)();
+
+```
+
+This line strictly defines `Action` as a pointer to a member function that **returns void** and **takes exactly zero parameters**.
+
+If you try to pass it a function like `void Player::addMoney(int amount)`, the compiler will throw a massive error because the signatures do not match. The `SimpleCommand` as written in this Wikipedia article is literally incapable of handling functions that require arguments.
+
+### How do we fix the limitation? (The Modern C++ Way)
+
+In older C++, people used to write incredibly complex templates to try and capture arguments. Today, we don't really use this Wikipedia structure anymore because C++11 gave us **Lambdas** and **`std::function`**.
+
+If you wanted to build a modern, generic command that can take ANY function with ANY parameters, you would bypass the complicated member-function pointers entirely and just use `std::function`:
+
+```cpp
+#include <functional>
+#include <iostream>
+
+// 1. The Interface remains the same
+class Command {
+public:
+    virtual ~Command() = default;
+    virtual void execute() = 0;
+};
+
+// 2. The Modern Generic Command
+class LambdaCommand : public Command {
+private:
+    std::function<void()> _action;
+
+public:
+    // It takes ANY function (or lambda) that can be executed with zero arguments
+    LambdaCommand(std::function<void()> action) : _action(action) {}
+
+    void execute() override {
+        _action(); // Just call the function!
+    }
+};
+
+```
+
+**How you pass arguments to it:**
+Because it uses `std::function`, you can use a "Lambda Capture" to bundle the object, the function, and the arguments all together at the exact moment you create the command!
+
+```cpp
+class Player {
+public:
+    void addMoney(int amount) {
+        std::cout << "Added " << amount << " money!" << std::endl;
+    }
+};
+
+int main() {
+    Player myPlayer;
+    int loot = 50;
+
+    // We create a command and use a lambda [=] to capture the arguments!
+    LambdaCommand cmd([&myPlayer, loot]() {
+        myPlayer.addMoney(loot);
+    });
+
+    // Later on...
+    cmd.execute(); // Prints: Added 50 money!
+    
+    return 0;
+}
+
+```
+
+You are asking one of the most important architectural questions in C++.
+
+Yes! When you inherit, you have three options: **`public`**, **`private`**, and **`protected`**.
+
+The keyword you choose dictates **who is allowed to know** that the inheritance happened, and how the base class's methods are exposed to the outside world.
+
+Here is exactly how they work:
+
+### 1. `public` Inheritance (The "IS-A" Relationship)
+
+This is what we used, and it is used 95% of the time in C++. It means **"A SimpleCommand IS A Command."**
+
+* **What it does:** Everything that was public in the base class stays public in the child class.
+* **Why we needed it:** Because we used `public`, the outside world (like our `main()` function) is allowed to know that `SimpleCommand` inherits from `Command`. This is what allowed us to put it inside a `std::vector<Command*>`.
+If you don't use `public` here, polymorphism breaks, and the compiler will refuse to put your child class into a parent-class vector.
+
+### 2. `private` Inheritance (The "Implemented-In-Terms-Of" Relationship)
+
+If you write `class SimpleCommand : private Command`, you are keeping a secret.
+
+* **What it does:** It pulls all the code from `Command` into `SimpleCommand`, but **makes it all private**.
+* **The Result:** The outside world has absolutely no idea that `SimpleCommand` inherits from `Command`.
+* **When to use it:** You use this when you want to steal another class's code to build your class, but you don't want anyone else to know.
+
+**Example of `private` inheritance:**
+Let's say you want to build a `SecurityStack` class. You want to use the code from `std::vector` to build it, but you don't want people to be able to use vector functions like `.clear()` or `.insert()`.
+
+```cpp
+class SecurityStack : private std::vector<int> {
+public:
+    void pushSafe(int secretCode) {
+        this->push_back(secretCode); // You can use vector methods internally!
+    }
+};
+
+int main() {
+    SecurityStack stack;
+    stack.pushSafe(1234); // Works!
+    // stack.push_back(1234); // ERROR! push_back is now private to the outside world.
+}
+
+```
+
+### 3. `protected` Inheritance (The Middle Ground)
+
+This is very rare.
+If you write `class Child : protected Parent`, the public methods of `Parent` become `protected` inside `Child`.
+
+* The outside world can't see them (just like private).
+* BUT, if someone inherits from `Child` to make `Grandchild`, the `Grandchild` is still allowed to use the `Parent`'s methods.
+
+---
+
+### The Dangerous C++ "Gotcha"
+
+What happens if you don't write anything at all? What if you just write this?
+
+```cpp
+class SimpleCommand : Command { ... }
+
+```
+
+In C++, if you use the word `class`, **the default is `private` inheritance!**
+If you forget to write the word `public`, your code will suddenly throw massive errors saying *"cannot cast SimpleCommand to Command"*, because the compiler hid the inheritance from the outside world.
+
+*(Fun fact: If you use the word `struct` instead of `class`, the default is `public` inheritance!)*
+
+So, whenever you want to use Polymorphism (virtual functions, base-class pointers, overriding), you **must** explicitly write `public` so the compiler knows it is safe to treat the child as the parent!
+
+You are absolutely right. Now that you have seen the pain of the old `(receiver->*action)()` syntax, you can fully appreciate how much cleaner and more powerful the modern Lambda approach is!
+
+By using `std::function`, you completely eliminate the need for templates, you can easily pass arguments to your functions, and you don't have to fight with operator precedence.
+
+Here is how you build the exact same queue, but using the modern Lambda architecture we discussed earlier.
+
+### 1. The Modern Interface (`lambda_command.hpp`)
+
+Because we use `std::function<void()>`, this class can wrap *anything*—a class method, a standalone function, or just raw math.
+
+```cpp
+#pragma once
+#include <functional>
+
+// 1. The Base Interface (Same as before)
+class Command {
+public:
+    virtual ~Command() = default;
+    virtual void execute() = 0;
+};
+
+// 2. The Modern Concrete Command
+class LambdaCommand : public Command {
+private:
+    std::function<void()> _action; // Can hold literally any block of code
+
+public:
+    LambdaCommand(std::function<void()> action) : _action(action) {}
+
+    void execute() override {
+        if (_action) {
+            _action();
+        }
+    }
+};
+
+```
+
+### 2. The Clean Queue Implementation
+
+Notice how we don't have to specify `<PlayerReceiver>` or use the `&PlayerReceiver::jump` pointers. We just write standard C++ inside the lambda `[ ](){ }`, and it captures the objects automatically!
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <memory>
+// Assume PlayerReceiver and AudioSystemReceiver are defined here
+
+void lambda_command_test() {
+    std::cout << "\n\n================================\n";
+    std::cout << "============= Lambda Command Queue ============\n" << std::endl;
+
+    PlayerReceiver myPlayer;
+    AudioSystemReceiver myAudio;
+
+    std::vector<std::unique_ptr<Command>> commandQueue;
+
+    // 1. Wrap the Player jump in a Lambda
+    // [&myPlayer] means "capture myPlayer by reference so we can use it inside"
+    commandQueue.push_back(std::make_unique<LambdaCommand>([&myPlayer]() {
+        myPlayer.jump();
+    }));
+
+    // 2. Wrap the Audio sound in a Lambda
+    commandQueue.push_back(std::make_unique<LambdaCommand>([&myAudio]() {
+        myAudio.playJumpSound();
+    }));
+
+    // 3. The true power of Lambdas: We can pass arguments instantly!
+    // The Wikipedia version couldn't do this without massive rewrites.
+    int damage = 50;
+    commandQueue.push_back(std::make_unique<LambdaCommand>([damage]() {
+        std::cout << "[System] Dealt " << damage << " damage using a lambda!" << std::endl;
+    }));
+
+    // 4. Execute the queue
+    std::cout << "Executing lambda queue...\n\n";
+    for (const auto &cmd : commandQueue) {
+        cmd->execute();
+    }
+}
+
+```
+
+### Why this is the industry standard today:
+
+* **No `->*` nonsense:** You write natural code inside the lambda.
+* **Argument Support:** Notice how easy it was to pass `damage` into the third command. The templated Wikipedia version physically cannot do that without you writing entirely new classes for `ActionWithOneArg`, `ActionWithTwoArgs`, etc.
+* **Less Code:** You only need one single `LambdaCommand` class for your entire game or application.
+
+You have now built both the classic historical C++ version and the modern C++14 standard. That gives you an incredible depth of knowledge on the subject!
+
+Actually, that is the absolute greatest superpower of the Lambda approach: **You absolutely CAN mix different signatures in the exact same queue!**
+
+This is the main reason the game industry and modern C++ developers abandoned the old Wikipedia template method.
+
+Here is the trick: The queue itself only ever sees `void execute()` taking zero arguments. But because a Lambda acts like a little backpack, you can pack all the required arguments into the backpack *before* you put it in the queue.
+
+When the queue later says "execute!", the lambda unpacks its backpack and calls the real function with the correct signatures.
+
+Here is proof of how you can mix completely different function signatures in the exact same list:
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <string>
+#include "lambda_command.hpp" // (Using the LambdaCommand we just wrote)
+
+class GameEngine {
+public:
+    // Signature 1: Takes NO arguments, returns void
+    void saveGame() { 
+        std::cout << "Game saved." << std::endl; 
+    }
+    
+    // Signature 2: Takes TWO arguments (string, float), returns void
+    void playMusic(std::string track, float volume) { 
+        std::cout << "Playing " << track << " at volume " << volume << std::endl; 
+    }
+    
+    // Signature 3: Takes ONE argument (int), returns an INT!
+    int calculateDamage(int baseDamage) {
+        std::cout << "Calculated damage: " << baseDamage * 2 << std::endl;
+        return baseDamage * 2;
+    }
+};
+
+void mixed_signature_test() {
+    GameEngine engine;
+    std::vector<std::unique_ptr<Command>> queue;
+
+    // 1. Wrapping a zero-argument function
+    queue.push_back(std::make_unique<LambdaCommand>([&engine]() {
+        engine.saveGame();
+    }));
+
+    // 2. Wrapping a two-argument function!
+    // We just capture the arguments right here in the lambda.
+    queue.push_back(std::make_unique<LambdaCommand>([&engine]() {
+        engine.playMusic("boss_theme.mp3", 0.8f);
+    }));
+
+    // 3. Wrapping a function that takes arguments AND returns a value!
+    // The queue doesn't care that it returns an int, the lambda just eats the return value.
+    queue.push_back(std::make_unique<LambdaCommand>([&engine]() {
+        int result = engine.calculateDamage(50);
+        // We can even do extra logic inside the lambda!
+        if (result > 90) std::cout << "Critical Hit!\n";
+    }));
+
+    // 4. The queue executes them all blindly. 
+    // It has NO IDEA that they have different signatures underneath.
+    std::cout << "Executing Mixed Queue...\n";
+    for (const auto& cmd : queue) {
+        cmd->execute(); 
+    }
+}
+
+```
+
+### Why does this work? (Type Erasure)
+
+This concept is called **Type Erasure**. The `std::function<void()>` inside our `LambdaCommand` acts as a universal disguise.
+
+When you write: `[&engine]() { engine.playMusic("boss_theme.mp3", 0.8f); }`
+You are creating a block of code that *takes* zero arguments to run. The fact that *inside* the block it calls a function requiring a string and a float is completely hidden from the outside world.
+
+So your `std::vector` just sees a neat row of zero-argument commands, completely unaware of the complex, varied function signatures hiding inside each one!
+
+Actually, that is the absolute greatest superpower of the Lambda approach: **You absolutely CAN mix different signatures in the exact same queue!**
+
+This is the main reason the game industry and modern C++ developers abandoned the old Wikipedia template method.
+
+Here is the trick: The queue itself only ever sees `void execute()` taking zero arguments. But because a Lambda acts like a little backpack, you can pack all the required arguments into the backpack *before* you put it in the queue.
+
+When the queue later says "execute!", the lambda unpacks its backpack and calls the real function with the correct signatures.
+
+Here is proof of how you can mix completely different function signatures in the exact same list:
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <string>
+#include "lambda_command.hpp" // (Using the LambdaCommand we just wrote)
+
+class GameEngine {
+public:
+    // Signature 1: Takes NO arguments, returns void
+    void saveGame() { 
+        std::cout << "Game saved." << std::endl; 
+    }
+    
+    // Signature 2: Takes TWO arguments (string, float), returns void
+    void playMusic(std::string track, float volume) { 
+        std::cout << "Playing " << track << " at volume " << volume << std::endl; 
+    }
+    
+    // Signature 3: Takes ONE argument (int), returns an INT!
+    int calculateDamage(int baseDamage) {
+        std::cout << "Calculated damage: " << baseDamage * 2 << std::endl;
+        return baseDamage * 2;
+    }
+};
+
+void mixed_signature_test() {
+    GameEngine engine;
+    std::vector<std::unique_ptr<Command>> queue;
+
+    // 1. Wrapping a zero-argument function
+    queue.push_back(std::make_unique<LambdaCommand>([&engine]() {
+        engine.saveGame();
+    }));
+
+    // 2. Wrapping a two-argument function!
+    // We just capture the arguments right here in the lambda.
+    queue.push_back(std::make_unique<LambdaCommand>([&engine]() {
+        engine.playMusic("boss_theme.mp3", 0.8f);
+    }));
+
+    // 3. Wrapping a function that takes arguments AND returns a value!
+    // The queue doesn't care that it returns an int, the lambda just eats the return value.
+    queue.push_back(std::make_unique<LambdaCommand>([&engine]() {
+        int result = engine.calculateDamage(50);
+        // We can even do extra logic inside the lambda!
+        if (result > 90) std::cout << "Critical Hit!\n";
+    }));
+
+    // 4. The queue executes them all blindly. 
+    // It has NO IDEA that they have different signatures underneath.
+    std::cout << "Executing Mixed Queue...\n";
+    for (const auto& cmd : queue) {
+        cmd->execute(); 
+    }
+}
+
+```
+
+### Why does this work? (Type Erasure)
+
+This concept is called **Type Erasure**. The `std::function<void()>` inside our `LambdaCommand` acts as a universal disguise.
+
+When you write: `[&engine]() { engine.playMusic("boss_theme.mp3", 0.8f); }`
+You are creating a block of code that *takes* zero arguments to run. The fact that *inside* the block it calls a function requiring a string and a float is completely hidden from the outside world.
+
+So your `std::vector` just sees a neat row of zero-argument commands, completely unaware of the complex, varied function signatures hiding inside each one!
