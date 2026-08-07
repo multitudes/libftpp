@@ -15,81 +15,9 @@ int main() {
   observer_test();
   singleton_test();
   state_machine_test();
-
-  // --------------------- iostream ---------------------
-  std::cout << "\n\n================================\n";
-  std::cout << "============ thread safe iostream ===========\n";
-  std::cout << "=== 1. Starting ===\n";
-  std::cout << "=== PHASE 1: Launching Threads ===\n\n";
-
-  // Create a vector to hold our threads
-  std::vector<std::thread> workers;
-
-  // Spawn 3 threads, passing them an ID and a mock task name
-  workers.push_back(std::thread(workerTask, 1, "Audio"));
-  workers.push_back(std::thread(workerTask, 2, "Physics"));
-  workers.push_back(std::thread(workerTask, 3, "Network"));
-
-  // Wait for all threads to finish their work
-  for (auto &worker : workers) {
-    if (worker.joinable()) {
-      worker.join();
-    }
-  }
-
-  std::cout << "\n=== PHASE 2: Testing Input (Prompt) ===\n\n";
-
-  // We can also test the prompt feature from the main thread!
-
-  // threadSafeCout.setPrefix("[Main Thread] ");
-  // int userAge = 0;
-
-  // Uncomment this line below if you want to test the interactive input!
-  // threadSafeCout.prompt("Enter your age to exit: ", userAge);
-
-  // threadSafeCout << "Test complete. User age entered: " << userAge <<
-  // std::endl;
-
-  // --------------------- thread safe queue ---------------------
-  std::cout << "\n\n================================\n";
-  std::cout << "============ thread safe queue ===========\n";
-  std::cout << "=== 1. Starting ===\n";
-
-  ThreadSafeQueue<std::string> jobQueue;
-
-  std::cout << "=== 1. Testing Pushes ===\n";
-  jobQueue.push_back("Task B (Back)");
-  jobQueue.push_front("Task A (Front)");
-  jobQueue.push_back("Task C (Back)");
-
-  std::cout << "Tasks added successfully.\n\n";
-
-  std::cout << "=== 2. Testing Pops ===\n";
-  // Expected order based on our pushes: A, B, C
-  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be A
-  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be B
-  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be C
-
-  std::cout << "\n=== 3. Testing Exception ===\n";
-  try {
-    std::cout << "Attempting to pop from an empty queue...\n";
-    jobQueue.pop_front(); // This should trigger the throw!
-  } catch (const std::exception &e) {
-    std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
-  }
-
-  // --------------------- Thread ---------------------
-  std::cout << "\n\n================================\n";
-  std::cout << "============ Thread ===========\n";
-  std::cout << "=== 1. Starting ===\n\n";
-  Thread thread1("Thread1", myFunction1);
-  Thread thread2("Thread2", myFunction2);
-
-  thread1.start();
-  thread2.start();
-
-  thread1.stop();
-  thread2.stop();
+  thread_safe_iostream_test();
+  thread_safe_queue_test();
+  thread_test();
 
   // --------------------- WorkerPool ---------------------
   std::cout << "\n\n================================\n";
