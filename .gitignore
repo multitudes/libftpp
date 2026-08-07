@@ -64,3 +64,4 @@ test.dSYM/Contents/Info.plist
 test.dSYM/Contents/Resources/DWARF/test
 test.dSYM/Contents/Resources/Relocations/aarch64/test.yml
 test
+terrain_map.ppm

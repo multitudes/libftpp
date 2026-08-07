@@ -30,6 +30,7 @@ TType is the "What": This is the type of the final object you are storing in the
 TArgs are the "Ingredients": This represents the arguments passed into the constructor of TType.  
 
 
+
 ## NEW in CPP11
 
 You have spotted one of the most powerful—and notoriously confusing—features introduced in C++11!
@@ -308,6 +309,20 @@ Your `DataBuffer` wouldn't know the vector was cleared, and its `_readPos` would
 **With `const`:**
 By returning a `const ... &`, you are putting the vector behind museum glass. You are telling the user: *"You can look at the bytes, you can copy them, you can send them over a network, but the compiler will throw a massive error if you try to modify them."*
 
+## the trap - strings and others...
+I had to do an overload for strings because they are not trivially copyiable. I added a static assert for the other types
+Yes, exactly! It will completely stop the compilation dead in its tracks.
+
+That is the true beauty of **`static_assert`**. The word "static" in this context means **compile-time**.
+
+When you hit build, the compiler evaluates the condition before it even tries to generate the binary executable. If the condition is `false`, the compiler throws a hard error, prints your custom message, and refuses to finish building the program.
+
+Here is why this is so much better than a normal `assert()` or an `if` statement:
+
+* **Standard `assert()**` is a *runtime* check. Your code compiles successfully, you run the program, and then when it hits the bad code, the whole application crashes in front of the user.
+* **`static_assert`** is a *compile-time* check. You literally cannot build or distribute a broken version of the program. It catches the bug on the developer's machine before it ever runs.
+
+By putting that single line in your template, you have built a permanent, unbreakable structural wall in your code that physically prevents anyone (including future you) from ever accidentally corrupting memory with this buffer!
 
 ## The "Include What You Use" Rule (IWYU)
 
