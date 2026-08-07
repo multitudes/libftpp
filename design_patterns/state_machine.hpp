@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <stdexcept>
 #include <utility>
 
 template <typename TState> class StateMachine {
@@ -39,12 +40,12 @@ public:
   void transitionTo(const TState &newState) {
     // throws if the action is not set up
     if (!_initialized) {
-      throw std::runtime_error("StateMachine has no states initialized!");
+      throw std::invalid_argument("StateMachine has no states initialized!");
     }
     std::pair<TState, TState> transitionKey = {_currentState, newState};
     auto it = _transitions.find(transitionKey);
     if (it == _transitions.end()) {
-      throw std::runtime_error("Invalid transition attempted!");
+      throw std::invalid_argument("Invalid transition attempted!");
     }
     it->second();
     _currentState = newState;
@@ -57,7 +58,8 @@ public:
     auto it = _actions.find(_currentState);
     // Subject Hint: If an update isn't set up, throw an exception!
     if (it == _actions.end()) {
-      throw std::runtime_error("No action registered for the current state!");
+      throw std::invalid_argument(
+          "No action registered for the current state!");
     }
 
     // Execute the action lambda for the current state

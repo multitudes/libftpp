@@ -1,5 +1,9 @@
 #pragma once
 
+#include <exception>
+#include <iostream>
+#include <string>
+
 // =============================================================================
 // Dummy Class to test our Pool
 // =============================================================================
@@ -215,10 +219,6 @@ void pool_test() {
       std::chrono::seconds(2)); // Wait for jobs to finish
 }
 
-#include <exception>
-#include <iostream>
-#include <string>
-
 class TestObject {
 public:
   int x;
@@ -314,4 +314,356 @@ void databuffer_test() {
   std::cout << "Attempting to read past the end of the buffer...\n";
   // This should safely fail and print your warning!
   buffer >> extraData;
+}
+
+class TestClass : public Memento {
+  friend class Memento;
+
+public:
+  int x;
+  std::string y;
+
+private:
+  void _saveToSnapshot(Snapshot &snapshotToFill) const override {
+    snapshotToFill << x << y;
+  }
+
+  void _loadFromSnapshot(Snapshot &snapshot) override { snapshot >> x >> y; }
+};
+
+void memento_test() {
+  TestClass myObject;
+  myObject.x = 42;
+  myObject.y = "Hello";
+
+  // Save the current state
+  TestClass::Snapshot savedState = myObject.save();
+
+  // Modify the object
+  myObject.x = 100;
+  myObject.y = "World";
+
+  // Output the modified object
+  // Expected Output: "Current state: x = 100, y = World"
+  std::cout << "Current state: x = " << myObject.x << ", y = " << myObject.y
+            << std::endl;
+
+  // Restore the object to its saved state
+  myObject.load(savedState);
+
+  // Output the restored object
+  // Expected Output: "Restored state: x = 42, y = Hello"
+  std::cout << "Restored state: x = " << myObject.x << ", y = " << myObject.y
+            << std::endl;
+  // --------------------- Memento ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Memento ===========\n";
+  std::cout << "=== 1. Starting New Game ===\n";
+  Player myPlayer(100, 10.0f, 20.0f);
+  myPlayer.printStatus();
+
+  std::cout << "\n=== 2. Hitting a Checkpoint (Saving) ===\n";
+  // We call the public save() method inherited from Memento
+  Memento::Snapshot saveSlot1 = myPlayer.save();
+
+  // int (4) + float (4) + float (4) = 12 bytes!
+  std::cout << "Game saved successfully! Snapshot size: " << saveSlot1.size()
+            << " bytes.\n";
+
+  std::cout << "\n=== 3. Disaster Strikes! ===\n";
+  std::cout << "Player falls into a trap and takes 80 damage...\n";
+  myPlayer.takeDamage(80);
+  myPlayer.move(5.5f, -15.0f);
+  myPlayer.printStatus();
+
+  std::cout << "\n=== 4. Reloading Checkpoint ===\n";
+  std::cout << "Loading saveSlot1...\n";
+  // We call the public load() method, which safely reads our copy
+  myPlayer.load(saveSlot1);
+  myPlayer.printStatus();
+
+  std::cout << "\n=== 5. Verifying Snapshot Integrity ===\n";
+  std::cout << "Did the snapshot survive the load? Let's load it AGAIN!\n";
+  myPlayer.takeDamage(99);  // Mess up the state again
+  myPlayer.load(saveSlot1); // Load the exact same snapshot a second time
+  myPlayer.printStatus();
+  std::cout << "Success! The snapshot is perfectly intact.\n";
+}
+
+enum class EventType { EVENT_ONE, EVENT_TWO, EVENT_THREE };
+
+void observer_test() {
+  Observer<EventType> observer;
+
+  // Subscribe to EVENT_ONE
+  observer.subscribe(EventType::EVENT_ONE,
+                     []() { std::cout << "Event One triggered" << std::endl; });
+
+  // Subscribe first lambda to EVENT_TWO
+  observer.subscribe(EventType::EVENT_TWO, []() {
+    std::cout << "Event Two triggered (First subscriber)" << std::endl;
+  });
+
+  // Subscribe second lambda to EVENT_TWO
+  observer.subscribe(EventType::EVENT_TWO, []() {
+    std::cout << "Event Two triggered (Second subscriber)" << std::endl;
+  });
+
+  // Triggering EVENT_ONE
+  std::cout << "Notify EVENT_ONE" << std::endl;
+  observer.notify(EventType::EVENT_ONE); // Output: "Event One triggered"
+
+  // Triggering EVENT_TWO
+  std::cout << "Notify EVENT_TWO" << std::endl;
+  observer.notify(EventType::EVENT_TWO);
+  // Output:
+  // "Event Two triggered (First subscriber)"
+  // "Event Two triggered (Second subscriber)"
+  // The order may differ
+
+  // Triggering EVENT_THREE (No subscriber)
+  std::cout << "Notify EVENT_THREE" << std::endl;
+  observer.notify(
+      EventType::EVENT_THREE); // Output: None, as there are no subscribers
+                               // --------------------- Observer
+                               // ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Observer ===========\n";
+  std::cout << "=== 1. Starting ===\n";
+  // Our central event manager, templated to use our custom struct
+  Observer<PlayerEvent> gameEvents;
+
+  // Define some specific event signatures
+  PlayerEvent aliceLevelUp = {1, "Alice"};
+  PlayerEvent bobLevelUp = {1, "Bob"};
+  PlayerEvent aliceDeath = {2, "Alice"};
+
+  std::cout << "=== PHASE 1: Subscribing to Events ===\n";
+
+  // UI System subscribes to Alice's level up
+  gameEvents.subscribe(aliceLevelUp, []() {
+    std::cout << "[UI System] FLASHING CONGRATS FOR ALICE!\n";
+  });
+
+  // Audio System ALSO subscribes to Alice's level up
+  gameEvents.subscribe(aliceLevelUp, []() {
+    std::cout << "[Audio System] Playing level-up chime for Alice!\n";
+  });
+
+  // UI System subscribes to Bob's level up
+  gameEvents.subscribe(bobLevelUp, []() {
+    std::cout << "[UI System] Flashing congrats for Bob!\n";
+  });
+
+  std::cout << "Subscribers registered successfully.\n\n";
+
+  std::cout << "=== PHASE 2: Triggering Events ===\n";
+
+  std::cout << "--> Action: Alice levels up!\n";
+  gameEvents.notify(aliceLevelUp);
+  // Expectation: Triggers both the UI and Audio lambdas for Alice.
+
+  std::cout << "\n--> Action: Bob levels up!\n";
+  gameEvents.notify(bobLevelUp);
+  // Expectation: Triggers ONLY the UI lambda for Bob. Alice's audio shouldn't
+  // play.
+
+  std::cout << "\n--> Action: Alice dies!\n";
+  gameEvents.notify(aliceDeath);
+  // Expectation: Nothing happens! Nobody subscribed to this event,
+  // and our find() method safely ignores it without crashing.
+
+  std::cout << "\nAll events processed successfully.\n";
+}
+
+class MyClass {
+public:
+  MyClass(int value) {
+    std::cout << "MyClass constructor, with value [" << value << "]"
+              << std::endl;
+  }
+
+  void printMessage() { std::cout << "Hello from MyClass" << std::endl; }
+};
+
+void singleton_test() {
+
+  std::cout << "\n\n================================\n";
+  std::cout << "============ SINGLETON ===========\n";
+  std::cout << "=== 1. Initializing the Singleton ===\n";
+
+  // We pass the arguments (int, std::string) perfectly to the private
+  // constructor using the variadic template!
+  Singleton<GameManager>::instantiate(1, "Hardcore");
+
+  std::cout << "\n=== 2. Accessing the Instance ===\n";
+
+  // We grab the global pointer to our one and only GameManager
+  GameManager *myGame = Singleton<GameManager>::instance();
+  if (myGame != nullptr) {
+    myGame->play();
+  }
+
+  std::cout << "\n=== 3. Trying to break the Singleton Rule ===\n";
+
+  try {
+    std::cout << "Attempting to instantiate a second GameManager...\n";
+    // This should trigger our exception!
+    Singleton<GameManager>::instantiate(5, "Easy");
+  } catch (const std::exception &e) {
+    std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
+  }
+
+  // (Optional) Standard compiler check:
+  // Uncommenting the line below will cause a COMPILER ERROR because the
+  // constructor is private!
+  // GameManager illegalManager(10, "Normal");
+
+  try {
+    // This should throw an exception as instance is not yet created
+    Singleton<MyClass>::instance();
+  } catch (const std::exception &e) {
+    std::cout << "Exception: " << e.what()
+              << std::endl; // Output: "Exception: Instance not yet created"
+  }
+
+  Singleton<MyClass>::instantiate(42); // Setting up the instance
+
+  Singleton<MyClass>::instance()
+      ->printMessage(); // Output: "Hello from MyClass"
+
+  try {
+    // This should throw an exception as instance is already created
+    Singleton<MyClass>::instantiate(100);
+  } catch (const std::exception &e) {
+    std::cout << "Exception: " << e.what()
+              << std::endl; // Output: "Exception: Instance already created"
+  }
+}
+
+enum class State { Idle, Running, Paused, Stopped };
+
+void state_machine_test() {
+  StateMachine<State> sm;
+
+  sm.addState(State::Idle);
+  sm.addState(State::Running);
+  sm.addState(State::Paused);
+  sm.addState(State::Stopped);
+
+  sm.addAction(State::Idle,
+               [] { std::cout << "System is idle." << std::endl; });
+  sm.addAction(State::Running,
+               [] { std::cout << "System is running." << std::endl; });
+  sm.addAction(State::Paused,
+               [] { std::cout << "System is paused." << std::endl; });
+  // No addAction for State::Stopped, it will use the default empty lambda
+
+  sm.addTransition(State::Idle, State::Running, [] {
+    std::cout << "Transitioning from Idle to Running." << std::endl;
+  });
+  sm.addTransition(State::Running, State::Paused, [] {
+    std::cout << "Transitioning from Running to Paused." << std::endl;
+  });
+  sm.addTransition(State::Paused, State::Running, [] {
+    std::cout << "Transitioning from Paused to Running." << std::endl;
+  });
+  // No addTransition for State::Stopped
+
+  sm.update(); // Should print: "System is idle."
+  sm.transitionTo(
+      State::Running); // Should print: "Transitioning from Idle to Running."
+  sm.update();         // Should print: "System is running."
+  sm.transitionTo(
+      State::Paused); // Should print: "Transitioning from Running to Paused."
+  sm.update();        // Should print: "System is paused."
+
+  // Transitioning to and from the new State::Stopped
+  try {
+    sm.transitionTo(State::Stopped); // Should not print any transition message,
+                                     // and throw an exception
+  } catch (const std::invalid_argument &e) {
+    std::cout << "Exception caught: " << e.what()
+              << std::endl; // Handle state not found
+  }
+
+  try {
+    sm.transitionTo(State::Stopped); // Should not print anything, default empty
+                                     // lambda is executed
+  } catch (const std::invalid_argument &e) {
+    std::cout << "Exception caught: " << e.what()
+              << std::endl; // Handle state not found
+  }
+
+  try {
+    sm.transitionTo(State::Running); // Should not print any transition message,
+                                     // and throw an exception
+  } catch (const std::invalid_argument &e) {
+    std::cout << "Exception caught: " << e.what()
+              << std::endl; // Handle state not found
+  }
+  // --------------------- State Machine ---------------------
+  std::cout << "\n\n================================\n";
+  std::cout << "============ State Machine ===========\n";
+  std::cout << "=== 1. Starting ===\n";
+  StateMachine<EnemyState> ai;
+
+  std::cout << "=== PHASE 1: Setting up the Machine ===\n";
+
+  // Add valid states (The first one added, IDLE, becomes the starting state)
+  ai.addState(IDLE);
+  ai.addState(CHASE);
+  ai.addState(ATTACK);
+
+  // Register Actions (What happens DURING a state)
+  ai.addAction(IDLE, []() {
+    std::cout << "[Action] Enemy is standing still, picking its nose...\n";
+  });
+  ai.addAction(CHASE, []() {
+    std::cout << "[Action] Enemy is sprinting towards the player!\n";
+  });
+  // NOTICE: We intentionally forget to add an action for ATTACK to test our
+  // exception later!
+
+  // Register Transitions (What happens BETWEEN states)
+  ai.addTransition(IDLE, CHASE, []() {
+    std::cout << "[Transition] Enemy spots you! *ROARS*\n";
+  });
+  ai.addTransition(CHASE, ATTACK, []() {
+    std::cout << "[Transition] Enemy gets close enough and draws its sword!\n";
+  });
+
+  std::cout << "\n=== PHASE 2: Running the Machine (Happy Path) ===\n";
+
+  // We are currently in IDLE
+  ai.update();
+
+  // Move to CHASE
+  std::cout << "\n--> Transitioning to CHASE...\n";
+  ai.transitionTo(CHASE); // Triggers the roar
+  ai.update();            // Triggers the sprinting action
+
+  // Move to ATTACK
+  std::cout << "\n--> Transitioning to ATTACK...\n";
+  ai.transitionTo(ATTACK); // Triggers drawing the sword
+
+  std::cout << "\n=== PHASE 3: Testing the Exceptions (Error Path) ===\n";
+
+  std::cout << "\n--> Test A: Missing Update Action\n";
+  try {
+    // We are in ATTACK, but we never registered an addAction for ATTACK!
+    ai.update();
+  } catch (const std::exception &e) {
+    std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
+  }
+
+  std::cout << "\n--> Test B: Invalid Transition\n";
+  try {
+    // We are in ATTACK. We never registered a transition from ATTACK back to
+    // IDLE!
+    std::cout << "Trying to force transition from ATTACK to IDLE...\n";
+    ai.transitionTo(IDLE);
+  } catch (const std::exception &e) {
+    std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
+  }
 }
