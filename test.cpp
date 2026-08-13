@@ -1,125 +1,6 @@
-#pragma once
+#include "test.hpp"
+#include <cmath>
 
-#include "thread/persistent_worker.hpp"
-#include <chrono>
-#include <exception>
-#include <iostream>
-#include <string>
-#include <thread>
-
-// =============================================================================
-// Dummy Class to test our Pool
-// =============================================================================
-class Particle {
-public:
-  std::string name;
-  float x, y, z;
-
-  // A constructor with multiple arguments to test our variadic templates
-  Particle(std::string n, float startX, float startY, float startZ)
-      : name(n), x(startX), y(startY), z(startZ) {
-    std::cout << "  [+] Particle '" << name << "' constructed.\n";
-  }
-
-  // Destructor to prove it gets called without freeing the raw memory
-  ~Particle() { std::cout << "  [-] Particle '" << name << "' destroyed.\n"; }
-
-  void printPosition() {
-    std::cout << "      " << name << " is at (" << x << ", " << y << ", " << z
-              << ")\n";
-  }
-};
-
-// =============================================================================
-// Dummy Class to test our Memento
-// =============================================================================
-
-class Player : public Memento {
-private:
-  // 1. Granting Memento the VIP pass
-  friend class Memento;
-
-  // 2. The private state data
-  int _health;
-  float _x;
-  float _y;
-
-  // 3. Implementing the virtual contract
-  void _saveToSnapshot(Memento::Snapshot &snapshot) const override {
-    snapshot << _health << _x << _y;
-  }
-
-  void _loadFromSnapshot(Memento::Snapshot &snapshot) override {
-    snapshot >> _health >> _x >> _y;
-  }
-
-public:
-  // Constructor
-  Player(int hp, float startX, float startY)
-      : _health(hp), _x(startX), _y(startY) {}
-
-  // Methods to alter the state
-  void takeDamage(int amount) {
-    _health -= amount;
-    if (_health < 0)
-      _health = 0;
-  }
-
-  void move(float dx, float dy) {
-    _x += dx;
-    _y += dy;
-  }
-
-  // Helper to see what is happening
-  void printStatus() const {
-    std::cout << "  -> Health: " << _health << " | Position: (" << _x << ", "
-              << _y << ")\n";
-  }
-};
-
-// =========================================================================
-// The Custom Event Struct
-// =========================================================================
-struct PlayerEvent {
-  int eventType; // used like enum
-  std::string playerName;
-
-  // needed by std::map
-  bool operator<(const PlayerEvent &other) const {
-    if (eventType != other.eventType) {
-      return eventType < other.eventType;
-    }
-    return playerName < other.playerName;
-  }
-};
-
-// =========================================================================
-// The Class we want to turn into a Singleton
-// =========================================================================
-class GameManager {
-private:
-  friend class Singleton<GameManager>;
-  int _currentLevel;
-  std::string _difficulty;
-  // private constructor
-  GameManager(int startLevel, std::string difficulty)
-      : _currentLevel(startLevel), _difficulty(difficulty) {
-    std::cout << "[GameManager] Initialized at Level " << _currentLevel
-              << " on " << _difficulty << " difficulty.\n";
-  }
-
-public:
-  void play() {
-    std::cout << "--> Playing game at level " << _currentLevel << "...\n";
-  }
-};
-
-// =========================================================================
-// For the state machine
-// =========================================================================
-enum EnemyState { IDLE, CHASE, ATTACK };
-
-// Helper function to print enum names nicely
 std::string stateToString(EnemyState state) {
   if (state == IDLE)
     return "IDLE";
@@ -130,101 +11,58 @@ std::string stateToString(EnemyState state) {
   return "UNKNOWN";
 }
 
-// =========================================================================
-// The Worker Function
-// =========================================================================
 void workerTask(int threadID, std::string taskName) {
-  // 1. Set the prefix.
-  // Because threadSafeCout is 'thread_local', Thread 1's prefix
-  // will NOT overwrite Thread 2's prefix! They each have their own copy.
   threadSafeCout.setPrefix("[Worker " + std::to_string(threadID) + " | " +
                            taskName + "] ");
-
   for (int i = 1; i <= 3; ++i) {
-    // 2. Chaining multiple << operators.
-    // This all goes into the thread's private invisible buffer first.
     threadSafeCout << "Processing step " << i << "..." << std::endl;
-
-    // Sleep for a few milliseconds to force the OS to switch threads.
-    // This guarantees that if our code wasn't thread-safe, the lines would
-    // overlap!
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 }
-
 void pool_test() {
   std::cout << "\n\n================================\n";
   std::cout << "============ POOL ==============\n";
   std::cout << "=== 1. Initializing Pool ===\n";
-  // We use our parameterized constructor to allocate space for 3 Particles
   Pool<Particle> particlePool(3);
   std::cout << "Pool created with capacity for 3 particles.\n\n";
 
-  std::cout << "=== 2. Acquiring Objects ===\n";
+  std::cout << "=== 2. Acquiring Objects (Filling the pool) ===\n";
+  auto p1 = particlePool.acquire("Alpha", 1.0f, 2.0f, 3.0f);
+  auto p2 = particlePool.acquire("Beta", 0.0f, 0.0f, 0.0f);
+
   {
-    // We use a scope block { } to test the automatic destruction
+    // We open a scope for the 3rd particle
+    auto p3 = particlePool.acquire("Gamma", 9.9f, 9.9f, 9.9f);
 
-    // This perfectly forwards the string and 3 floats to the Particle
-    // constructor
-    auto p1 = particlePool.acquire("Alpha", 1.0f, 2.0f, 3.0f);
-    auto p2 = particlePool.acquire("Beta", 0.0f, 0.0f, 0.0f);
+    std::cout << "\n=== 3. Testing Pool Exhaustion ===\n";
+    std::cout
+        << "Pool should be full now. Attempting to acquire a 4th particle...\n";
 
-    // Test the overloaded -> operator
-    if (p1) {
-      p1->printPosition();
+    // This should trigger your edge-case warning and return a nullptr wrapper!
+    auto p4 = particlePool.acquire("Delta", 4.4f, 4.4f, 4.4f);
+
+    if (!p4) {
+      std::cout << "  -> Success! Correctly received an empty wrapper without "
+                   "crashing.\n";
     }
-    if (p2) {
-      p2->printPosition();
-    }
 
-    std::cout << "\n=== 3. Objects going out of scope ===\n";
-    // When this block ends, p1 and p2 are destroyed.
-    // Their destructors should run, releasing the slots back to the pool.
+    std::cout << "\n=== 4. Releasing Object (p3 goes out of scope) ===\n";
+  } // p3 is destroyed here, freeing up exactly one slot
+
+  std::cout << "\n=== 5. Acquiring Again (Reusing Memory) ===\n";
+  // This should safely grab the slot that p3 just vacated
+  auto p5 = particlePool.acquire("Epsilon", 5.5f, 5.5f, 5.5f);
+  if (p5) {
+    p5->printPosition();
   }
 
-  std::cout << "\n=== 4. Acquiring Again (Reusing Memory) ===\n";
-  // This should instantly slot into the memory that 'Alpha' or 'Beta' just
-  // vacated!
-  auto p3 = particlePool.acquire("Gamma", 9.9f, 9.9f, 9.9f);
-  if (p3) {
-    p3->printPosition();
-  }
-  std::cout << "\n=== 5. End of Program ===\n";
-  // p3 will be automatically destroyed as main() exits.
-
-  WorkerPool pool(4);
-
-  auto job = []() {
-    threadSafeCout << "Executing job on thread: " << std::this_thread::get_id()
-                   << std::endl;
-  };
-
-  for (int i = 0; i < 1000; ++i) {
-    pool.addJob(job);
-  }
-
-  std::this_thread::sleep_for(
-      std::chrono::seconds(2)); // Wait for jobs to finish
+  //   std::cout << "\n\033[1;32m[✔] Test passed!\033[0m\n";
 }
 
-class TestObject {
-public:
-  int x;
-  std::string y;
-
-  friend DataBuffer &operator<<(DataBuffer &p_buffer,
-                                const TestObject &p_object) {
-    p_buffer << p_object.x << p_object.y;
-    return p_buffer;
-  }
-
-  friend DataBuffer &operator>>(DataBuffer &p_buffer, TestObject &p_object) {
-    p_buffer >> p_object.x >> p_object.y;
-    return p_buffer;
-  }
-};
-
 void databuffer_test() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============ DATABUFFER ===========\n";
+  std::cout << "=== 1. Creating DataBuffer ===\n";
   DataBuffer myBuffer;
 
   TestObject obj1;
@@ -239,7 +77,7 @@ void databuffer_test() {
 
   TestObject deserializedObj1, deserializedObj2, deserializedObj3;
 
-  // This should work as expected
+  // Test Object Deserialization
   try {
     myBuffer >> deserializedObj1 >> deserializedObj2;
     std::cout << "Deserialized obj1: x = " << deserializedObj1.x
@@ -250,22 +88,17 @@ void databuffer_test() {
     std::cout << "Caught exception: " << e.what() << std::endl;
   }
 
-  // This should throw an exception because there are no more objects to
-  // deserialize
+  // Expecting a failure here since buffer is empty
   try {
     myBuffer >> deserializedObj3;
     std::cout << "Deserialized obj3: x = " << deserializedObj3.x
               << ", y = " << deserializedObj3.y << std::endl;
   } catch (const std::exception &e) {
-    std::cout << "Caught exception: " << e.what()
-              << std::endl; // This line should be executed
+    std::cout << "Caught expected exception: " << e.what() << std::endl;
   }
-  std::cout << "\n\n================================\n";
-  std::cout << "============ DATABUFFER ===========\n";
-  std::cout << "=== 1. Creating DataBuffer ===\n";
+
   DataBuffer buffer;
 
-  // The data we want to save/send
   int playerHealth = 100;
   float playerX = 45.5f;
   bool isPoisoned = true;
@@ -276,20 +109,14 @@ void databuffer_test() {
   std::cout << "  Poison : " << (isPoisoned ? "true" : "false") << "\n\n";
 
   std::cout << "=== 2. Serializing (Writing) ===\n";
-  // Chain the writes together!
   buffer << playerHealth << playerX << isPoisoned;
-
-  // Let's see how big the cassette tape is:
-  // int (4) + float (4) + bool (1) = 9 bytes
   std::cout << "Buffer size is now: " << buffer.size() << " bytes.\n\n";
 
   std::cout << "=== 3. Deserializing (Reading) ===\n";
-  // Completely empty variables to prove we are reading from the buffer
   int outHealth = 0;
   float outX = 0.0f;
   bool outPoisoned = false;
 
-  // We MUST read in the exact same order: int -> float -> bool
   buffer >> outHealth >> outX >> outPoisoned;
 
   std::cout << "Read from buffer:\n";
@@ -297,53 +124,58 @@ void databuffer_test() {
   std::cout << "  X Pos  : " << outX << "\n";
   std::cout << "  Poison : " << (outPoisoned ? "true" : "false") << "\n\n";
 
-  std::cout << "=== 4. Safety Check ===\n";
+  std::cout << "=== 4. Safety Check (Buffer End) ===\n";
   int extraData;
   std::cout << "Attempting to read past the end of the buffer...\n";
-  // This should safely fail and print your warning!
-  buffer >> extraData;
-}
-
-class TestClass : public Memento {
-  friend class Memento;
-
-public:
-  int x;
-  std::string y;
-
-private:
-  void _saveToSnapshot(Snapshot &snapshotToFill) const override {
-    snapshotToFill << x << y;
+  try {
+    buffer >> extraData;
+  } catch (const std::exception &e) {
+    std::cout << "Caught expected exception: " << e.what() << "\n";
   }
 
-  void _loadFromSnapshot(Snapshot &snapshot) override { snapshot >> x >> y; }
-};
+  std::cout << "\n=== 5. Empty String Edge Case ===\n";
+  DataBuffer stringBuffer;
+  std::string emptyString = "";
+  std::string normalString = "Still Works!";
+
+  std::cout << "Writing an empty string [\"\"] followed by normal text [\""
+            << normalString << "\"]...\n";
+  stringBuffer << emptyString << normalString;
+
+  std::string outEmpty;
+  std::string outNormal;
+
+  stringBuffer >> outEmpty >> outNormal;
+
+  std::cout << "Deserialized Strings:\n";
+  std::cout << "  String 1: \"" << outEmpty << "\"\n";
+  std::cout << "  String 2: \"" << outNormal << "\"\n";
+
+  if (outEmpty.empty() && outNormal == "Still Works!") {
+    std::cout << "  -> Success! Empty string safely serialized without "
+                 "corrupting memory.\n";
+  } else {
+    std::cout << "  -> FAILURE! The empty string corrupted the buffer.\n";
+  }
+}
 
 void memento_test() {
   TestClass myObject;
   myObject.x = 42;
   myObject.y = "Hello";
 
-  // Save the current state
   TestClass::Snapshot savedState = myObject.save();
 
-  // Modify the object
   myObject.x = 100;
   myObject.y = "World";
 
-  // Output the modified object
-  // Expected Output: "Current state: x = 100, y = World"
   std::cout << "Current state: x = " << myObject.x << ", y = " << myObject.y
             << std::endl;
 
-  // Restore the object to its saved state
   myObject.load(savedState);
-
-  // Output the restored object
-  // Expected Output: "Restored state: x = 42, y = Hello"
   std::cout << "Restored state: x = " << myObject.x << ", y = " << myObject.y
             << std::endl;
-  // --------------------- Memento ---------------------
+
   std::cout << "\n\n================================\n";
   std::cout << "============ Memento ===========\n";
   std::cout << "=== 1. Starting New Game ===\n";
@@ -351,10 +183,7 @@ void memento_test() {
   myPlayer.printStatus();
 
   std::cout << "\n=== 2. Hitting a Checkpoint (Saving) ===\n";
-  // We call the public save() method inherited from Memento
   Memento::Snapshot saveSlot1 = myPlayer.save();
-
-  // int (4) + float (4) + float (4) = 12 bytes!
   std::cout << "Game saved successfully! Snapshot size: " << saveSlot1.size()
             << " bytes.\n";
 
@@ -366,174 +195,169 @@ void memento_test() {
 
   std::cout << "\n=== 4. Reloading Checkpoint ===\n";
   std::cout << "Loading saveSlot1...\n";
-  // We call the public load() method, which safely reads our copy
   myPlayer.load(saveSlot1);
   myPlayer.printStatus();
 
   std::cout << "\n=== 5. Verifying Snapshot Integrity ===\n";
   std::cout << "Did the snapshot survive the load? Let's load it AGAIN!\n";
-  myPlayer.takeDamage(99);  // Mess up the state again
-  myPlayer.load(saveSlot1); // Load the exact same snapshot a second time
+  myPlayer.takeDamage(99);
+  myPlayer.load(saveSlot1);
   myPlayer.printStatus();
   std::cout << "Success! The snapshot is perfectly intact.\n";
 }
 
-enum class EventType { EVENT_ONE, EVENT_TWO, EVENT_THREE };
-
 void observer_test() {
   Observer<EventType> observer;
 
-  // Subscribe to EVENT_ONE
   observer.subscribe(EventType::EVENT_ONE,
                      []() { std::cout << "Event One triggered" << std::endl; });
-
-  // Subscribe first lambda to EVENT_TWO
   observer.subscribe(EventType::EVENT_TWO, []() {
     std::cout << "Event Two triggered (First subscriber)" << std::endl;
   });
-
-  // Subscribe second lambda to EVENT_TWO
   observer.subscribe(EventType::EVENT_TWO, []() {
     std::cout << "Event Two triggered (Second subscriber)" << std::endl;
   });
 
-  // Triggering EVENT_ONE
   std::cout << "Notify EVENT_ONE" << std::endl;
-  observer.notify(EventType::EVENT_ONE); // Output: "Event One triggered"
+  observer.notify(EventType::EVENT_ONE);
 
-  // Triggering EVENT_TWO
   std::cout << "Notify EVENT_TWO" << std::endl;
   observer.notify(EventType::EVENT_TWO);
-  // Output:
-  // "Event Two triggered (First subscriber)"
-  // "Event Two triggered (Second subscriber)"
-  // The order may differ
 
-  // Triggering EVENT_THREE (No subscriber)
   std::cout << "Notify EVENT_THREE" << std::endl;
-  observer.notify(
-      EventType::EVENT_THREE); // Output: None, as there are no subscribers
-                               // --------------------- Observer
-                               // ---------------------
+  observer.notify(EventType::EVENT_THREE);
+
   std::cout << "\n\n================================\n";
   std::cout << "============ Observer ===========\n";
   std::cout << "=== 1. Starting ===\n";
-  // Our central event manager, templated to use our custom struct
   Observer<PlayerEvent> gameEvents;
 
-  // Define some specific event signatures
   PlayerEvent aliceLevelUp = {1, "Alice"};
   PlayerEvent bobLevelUp = {1, "Bob"};
   PlayerEvent aliceDeath = {2, "Alice"};
 
   std::cout << "=== PHASE 1: Subscribing to Events ===\n";
 
-  // UI System subscribes to Alice's level up
   gameEvents.subscribe(aliceLevelUp, []() {
     std::cout << "[UI System] FLASHING CONGRATS FOR ALICE!\n";
   });
-
-  // Audio System ALSO subscribes to Alice's level up
   gameEvents.subscribe(aliceLevelUp, []() {
     std::cout << "[Audio System] Playing level-up chime for Alice!\n";
   });
-
-  // UI System subscribes to Bob's level up
   gameEvents.subscribe(bobLevelUp, []() {
     std::cout << "[UI System] Flashing congrats for Bob!\n";
   });
 
   std::cout << "Subscribers registered successfully.\n\n";
-
   std::cout << "=== PHASE 2: Triggering Events ===\n";
 
   std::cout << "--> Action: Alice levels up!\n";
   gameEvents.notify(aliceLevelUp);
-  // Expectation: Triggers both the UI and Audio lambdas for Alice.
 
   std::cout << "\n--> Action: Bob levels up!\n";
   gameEvents.notify(bobLevelUp);
-  // Expectation: Triggers ONLY the UI lambda for Bob. Alice's audio shouldn't
-  // play.
 
   std::cout << "\n--> Action: Alice dies!\n";
   gameEvents.notify(aliceDeath);
-  // Expectation: Nothing happens! Nobody subscribed to this event,
-  // and our find() method safely ignores it without crashing.
 
   std::cout << "\nAll events processed successfully.\n";
 }
 
-class MyClass {
-public:
-  MyClass(int value) {
-    std::cout << "MyClass constructor, with value [" << value << "]"
-              << std::endl;
-  }
-
-  void printMessage() { std::cout << "Hello from MyClass" << std::endl; }
-};
-
 void singleton_test() {
-
   std::cout << "\n\n================================\n";
   std::cout << "============ SINGLETON ===========\n";
   std::cout << "=== 1. Initializing the Singleton ===\n";
 
-  // We pass the arguments (int, std::string) perfectly to the private
-  // constructor using the variadic template!
   Singleton<GameManager>::instantiate(1, "Hardcore");
 
   std::cout << "\n=== 2. Accessing the Instance ===\n";
-
-  // We grab the global pointer to our one and only GameManager
   GameManager *myGame = Singleton<GameManager>::instance();
   if (myGame != nullptr) {
     myGame->play();
   }
 
   std::cout << "\n=== 3. Trying to break the Singleton Rule ===\n";
-
   try {
     std::cout << "Attempting to instantiate a second GameManager...\n";
-    // This should trigger our exception!
     Singleton<GameManager>::instantiate(5, "Easy");
   } catch (const std::exception &e) {
     std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
   }
 
-  // (Optional) Standard compiler check:
-  // Uncommenting the line below will cause a COMPILER ERROR because the
-  // constructor is private!
-  // GameManager illegalManager(10, "Normal");
-
   try {
-    // This should throw an exception as instance is not yet created
     Singleton<MyClass>::instance();
   } catch (const std::exception &e) {
-    std::cout << "Exception: " << e.what()
-              << std::endl; // Output: "Exception: Instance not yet created"
+    std::cout << "Exception: " << e.what() << std::endl;
   }
 
-  Singleton<MyClass>::instantiate(42); // Setting up the instance
-
-  Singleton<MyClass>::instance()
-      ->printMessage(); // Output: "Hello from MyClass"
+  Singleton<MyClass>::instantiate(42);
+  Singleton<MyClass>::instance()->printMessage();
 
   try {
-    // This should throw an exception as instance is already created
     Singleton<MyClass>::instantiate(100);
   } catch (const std::exception &e) {
-    std::cout << "Exception: " << e.what()
-              << std::endl; // Output: "Exception: Instance already created"
+    std::cout << "Exception: " << e.what() << std::endl;
+  }
+  std::cout << "\n=== 4. Testing Thread Safety (Race Condition) ===\n";
+
+  // We will spawn 10 threads that all try to instantiate a new Singleton at the
+  // exact same time.
+  std::vector<std::thread> threads;
+  int successCount = 0;
+  int exceptionCount = 0;
+  std::mutex
+      coutMutex; // Just to keep our console prints from garbling together
+
+  // Dummy class just for this thread test
+  class ThreadTestClass {
+    friend class Singleton<ThreadTestClass>;
+    ThreadTestClass(int) {} // Private constructor
+  };
+
+  for (int i = 0; i < 10; ++i) {
+    threads.push_back(
+        std::thread([&successCount, &exceptionCount, &coutMutex]() {
+          try {
+            // ALL 10 threads hit this line at roughly the same time!
+            Singleton<ThreadTestClass>::instantiate(99);
+
+            std::lock_guard<std::mutex> lock(coutMutex);
+            successCount++;
+            std::cout << "[Thread " << std::this_thread::get_id()
+                      << "] WINNER: Successfully instantiated the Singleton!\n";
+          } catch (const std::exception &) {
+            std::lock_guard<std::mutex> lock(coutMutex);
+            exceptionCount++;
+            // We ignore the print here so it doesn't spam, but we count the
+            // exception
+          }
+        }));
+  }
+
+  // Wait for all threads to finish fighting
+  for (auto &t : threads) {
+    t.join();
+  }
+
+  std::cout << "\nRace Condition Results:\n";
+  std::cout << "  Successful instantiations : " << successCount
+            << " (Expected: 1)\n";
+  std::cout << "  Caught exceptions         : " << exceptionCount
+            << " (Expected: 9)\n";
+
+  if (successCount == 1 && exceptionCount == 9) {
+    std::cout << "  -> THREAD SAFE! Only one thread managed to create it.\n";
+  } else {
+    std::cout << "  -> THREAD UNSAFE! Multiple instances were created, memory "
+                 "leaked.\n";
   }
 }
 
-enum class State { Idle, Running, Paused, Stopped };
-
 void state_machine_test() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============ State Machine ===========\n";
+  std::cout << "=== Test Starting ===\n";
   StateMachine<State> sm;
-
   sm.addState(State::Idle);
   sm.addState(State::Running);
   sm.addState(State::Paused);
@@ -545,7 +369,6 @@ void state_machine_test() {
                [] { std::cout << "System is running." << std::endl; });
   sm.addAction(State::Paused,
                [] { std::cout << "System is paused." << std::endl; });
-  // No addAction for State::Stopped, it will use the default empty lambda
 
   sm.addTransition(State::Idle, State::Running, [] {
     std::cout << "Transitioning from Idle to Running." << std::endl;
@@ -556,64 +379,44 @@ void state_machine_test() {
   sm.addTransition(State::Paused, State::Running, [] {
     std::cout << "Transitioning from Paused to Running." << std::endl;
   });
-  // No addTransition for State::Stopped
 
-  sm.update(); // Should print: "System is idle."
-  sm.transitionTo(
-      State::Running); // Should print: "Transitioning from Idle to Running."
-  sm.update();         // Should print: "System is running."
-  sm.transitionTo(
-      State::Paused); // Should print: "Transitioning from Running to Paused."
-  sm.update();        // Should print: "System is paused."
+  sm.update();
+  sm.transitionTo(State::Running);
+  sm.update();
+  sm.transitionTo(State::Paused);
+  sm.update();
 
-  // Transitioning to and from the new State::Stopped
   try {
-    sm.transitionTo(State::Stopped); // Should not print any transition message,
-                                     // and throw an exception
+    sm.transitionTo(State::Stopped);
   } catch (const std::invalid_argument &e) {
-    std::cout << "Exception caught: " << e.what()
-              << std::endl; // Handle state not found
+    std::cout << "Exception caught: " << e.what() << std::endl;
   }
 
   try {
-    sm.transitionTo(State::Stopped); // Should not print anything, default empty
-                                     // lambda is executed
+    sm.transitionTo(State::Stopped);
   } catch (const std::invalid_argument &e) {
-    std::cout << "Exception caught: " << e.what()
-              << std::endl; // Handle state not found
+    std::cout << "Exception caught: " << e.what() << std::endl;
   }
 
   try {
-    sm.transitionTo(State::Running); // Should not print any transition message,
-                                     // and throw an exception
+    sm.transitionTo(State::Running);
   } catch (const std::invalid_argument &e) {
-    std::cout << "Exception caught: " << e.what()
-              << std::endl; // Handle state not found
+    std::cout << "Exception caught: " << e.what() << std::endl;
   }
-  // --------------------- State Machine ---------------------
-  std::cout << "\n\n================================\n";
-  std::cout << "============ State Machine ===========\n";
-  std::cout << "=== 1. Starting ===\n";
+
   StateMachine<EnemyState> ai;
-
   std::cout << "=== PHASE 1: Setting up the Machine ===\n";
-
-  // Add valid states (The first one added, IDLE, becomes the starting state)
   ai.addState(IDLE);
   ai.addState(CHASE);
   ai.addState(ATTACK);
 
-  // Register Actions (What happens DURING a state)
   ai.addAction(IDLE, []() {
     std::cout << "[Action] Enemy is standing still, picking its nose...\n";
   });
   ai.addAction(CHASE, []() {
     std::cout << "[Action] Enemy is sprinting towards the player!\n";
   });
-  // NOTICE: We intentionally forget to add an action for ATTACK to test our
-  // exception later!
 
-  // Register Transitions (What happens BETWEEN states)
   ai.addTransition(IDLE, CHASE, []() {
     std::cout << "[Transition] Enemy spots you! *ROARS*\n";
   });
@@ -622,24 +425,17 @@ void state_machine_test() {
   });
 
   std::cout << "\n=== PHASE 2: Running the Machine (Happy Path) ===\n";
-
-  // We are currently in IDLE
+  ai.update();
+  std::cout << "\n--> Transitioning to CHASE...\n";
+  ai.transitionTo(CHASE);
   ai.update();
 
-  // Move to CHASE
-  std::cout << "\n--> Transitioning to CHASE...\n";
-  ai.transitionTo(CHASE); // Triggers the roar
-  ai.update();            // Triggers the sprinting action
-
-  // Move to ATTACK
   std::cout << "\n--> Transitioning to ATTACK...\n";
-  ai.transitionTo(ATTACK); // Triggers drawing the sword
+  ai.transitionTo(ATTACK);
 
   std::cout << "\n=== PHASE 3: Testing the Exceptions (Error Path) ===\n";
-
   std::cout << "\n--> Test A: Missing Update Action\n";
   try {
-    // We are in ATTACK, but we never registered an addAction for ATTACK!
     ai.update();
   } catch (const std::exception &e) {
     std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
@@ -647,8 +443,6 @@ void state_machine_test() {
 
   std::cout << "\n--> Test B: Invalid Transition\n";
   try {
-    // We are in ATTACK. We never registered a transition from ATTACK back to
-    // IDLE!
     std::cout << "Trying to force transition from ATTACK to IDLE...\n";
     ai.transitionTo(IDLE);
   } catch (const std::exception &e) {
@@ -664,7 +458,6 @@ void printNumbers(const std::string &p_prefix) {
 }
 
 void thread_safe_iostream_test() {
-
   std::string prefix1 = "[Thread 1] ";
   std::string prefix2 = "[Thread 2] ";
 
@@ -674,21 +467,16 @@ void thread_safe_iostream_test() {
   thread1.join();
   thread2.join();
 
-  // --------------------- iostream ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ thread safe iostream ===========\n";
   std::cout << "=== 1. Starting ===\n";
   std::cout << "=== PHASE 1: Launching Threads ===\n\n";
 
-  // Create a vector to hold our threads
   std::vector<std::thread> workers;
-
-  // Spawn 3 threads, passing them an ID and a mock task name
   workers.push_back(std::thread(workerTask, 1, "Audio"));
   workers.push_back(std::thread(workerTask, 2, "Physics"));
   workers.push_back(std::thread(workerTask, 3, "Network"));
 
-  // Wait for all threads to finish their work
   for (auto &worker : workers) {
     if (worker.joinable()) {
       worker.join();
@@ -696,17 +484,6 @@ void thread_safe_iostream_test() {
   }
 
   std::cout << "\n=== PHASE 2: Testing Input (Prompt) ===\n\n";
-
-  // We can also test the prompt feature from the main thread!
-
-  // threadSafeCout.setPrefix("[Main Thread] ");
-  // int userAge = 0;
-
-  // Uncomment this line below if you want to test the interactive input!
-  // threadSafeCout.prompt("Enter your age to exit: ", userAge);
-
-  // threadSafeCout << "Test complete. User age entered: " << userAge <<
-  // std::endl;
 }
 
 void testPush(ThreadSafeQueue<int> &p_queue, int p_value) {
@@ -724,6 +501,9 @@ void testPop(ThreadSafeQueue<int> &p_queue) {
 }
 
 void thread_safe_queue_test() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============ thread safe queue ===========\n";
+  std::cout << "===  Starting ===\n";
   ThreadSafeQueue<int> myQueue;
 
   std::thread thread1(testPush, std::ref(myQueue), 10);
@@ -737,30 +517,23 @@ void thread_safe_queue_test() {
   thread3.join();
   thread4.join();
   thread5.join();
-  // --------------------- thread safe queue ---------------------
-  std::cout << "\n\n================================\n";
-  std::cout << "============ thread safe queue ===========\n";
-  std::cout << "=== 1. Starting ===\n";
 
   ThreadSafeQueue<std::string> jobQueue;
-
   std::cout << "=== 1. Testing Pushes ===\n";
   jobQueue.push_back("Task B (Back)");
   jobQueue.push_front("Task A (Front)");
   jobQueue.push_back("Task C (Back)");
 
   std::cout << "Tasks added successfully.\n\n";
-
   std::cout << "=== 2. Testing Pops ===\n";
-  // Expected order based on our pushes: A, B, C
-  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be A
-  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be B
-  std::cout << "Popped: " << jobQueue.pop_front() << "\n"; // Should be C
+  std::cout << "Popped: " << jobQueue.pop_front() << "\n";
+  std::cout << "Popped: " << jobQueue.pop_front() << "\n";
+  std::cout << "Popped: " << jobQueue.pop_front() << "\n";
 
   std::cout << "\n=== 3. Testing Exception ===\n";
   try {
     std::cout << "Attempting to pop from an empty queue...\n";
-    jobQueue.pop_front(); // This should trigger the throw!
+    jobQueue.pop_front();
   } catch (const std::exception &e) {
     std::cerr << "EXCEPTION CAUGHT: " << e.what() << "\n";
   }
@@ -779,6 +552,9 @@ void myFunction2() {
 }
 
 void thread_test() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Thread ===========\n";
+  std::cout << "=== Test Starting ===\n\n";
   Thread thread1("Thread1", myFunction1);
   Thread thread2("Thread2", myFunction2);
 
@@ -788,17 +564,11 @@ void thread_test() {
   thread1.stop();
   thread2.stop();
   {
-
-    // --------------------- Thread ---------------------
-    std::cout << "\n\n================================\n";
-    std::cout << "============ Thread ===========\n";
-    std::cout << "=== 1. Starting ===\n\n";
     Thread thread1("Thread1", myFunction1);
     Thread thread2("Thread2", myFunction2);
 
     thread1.start();
     thread2.start();
-
     thread1.stop();
     thread2.stop();
   }
@@ -806,7 +576,6 @@ void thread_test() {
 
 void workers_pool_test() {
   WorkerPool pool(4);
-
   auto job = []() {
     threadSafeCout << "Executing job on thread: " << std::this_thread::get_id()
                    << std::endl;
@@ -816,11 +585,8 @@ void workers_pool_test() {
     pool.addJob(job);
   }
 
-  std::this_thread::sleep_for(
-      std::chrono::seconds(2)); // Wait for jobs to finish
+  std::this_thread::sleep_for(std::chrono::seconds(2));
   {
-
-    // --------------------- WorkerPool ---------------------
     std::cout << "\n\n================================\n";
     std::cout << "============ WorkerPool ===========\n";
     std::cout << "=== 1. Starting ===\n\n";
@@ -829,69 +595,50 @@ void workers_pool_test() {
     auto job = []() {
       threadSafeCout << "Executing job on thread: "
                      << std::this_thread::get_id() << std::endl;
-      // Simulate a "heavy" computation by sleeping for 5 milliseconds
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
     };
 
     for (int i = 0; i < 1000; ++i) {
       pool.addJob(job);
     }
-
-    std::this_thread::sleep_for(
-        std::chrono::seconds(2)); // Wait for jobs to finish
+    std::this_thread::sleep_for(std::chrono::seconds(2));
   }
 }
 
 void persistent_worker_test() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============ PersistentWorker ===========\n";
+  std::cout << "=== test Starting ===\n\n";
   PersistentWorker worker;
-
   auto task1 = []() { threadSafeCout << "Executing Task 1" << std::endl; };
-
   auto task2 = []() { threadSafeCout << "Executing Task 2" << std::endl; };
 
   worker.addTask("Task1", task1);
   worker.addTask("Task2", task2);
-
   std::this_thread::sleep_for(std::chrono::seconds(1));
-
   worker.removeTask("Task1");
-
   std::this_thread::sleep_for(std::chrono::seconds(1));
-
-  // --------------------- PersistentWorker ---------------------
-
-  std::cout << "\n\n================================\n";
-  std::cout << "============ PersistentWorker ===========\n";
-  std::cout << "=== 1. Starting ===\n\n";
   {
     PersistentWorker worker;
-
     auto task1 = []() { threadSafeCout << "Executing Task 1" << std::endl; };
-
     auto task2 = []() { threadSafeCout << "Executing Task 2" << std::endl; };
 
     worker.addTask("Task1", task1);
     worker.addTask("Task2", task2);
-
     std::this_thread::sleep_for(std::chrono::seconds(1));
-
     worker.removeTask("Task1");
-
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
 }
 
 void message_test() {
-
-  // --------------------- Message ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ Message ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
-  // 1. Create a message of Type 99 (e.g., "Player Position Update")
+
   Message msg(99);
   std::cout << "[INFO] Message created with Type: " << msg.type() << "\n\n";
 
-  // 2. Create some trivially copyable variables to send
   uint32_t playerId = 404;
   float x_coord = 125.5f;
   double y_coord = -89.1234;
@@ -903,18 +650,13 @@ void message_test() {
   std::cout << "Y Coord:   " << y_coord << "\n";
   std::cout << "Crouching: " << isCrouching << "\n\n";
 
-  // 3. Serialize (Pack the envelope)
-  // Thanks to returning `*this`, we can chain them together!
   msg << playerId << x_coord << y_coord << isCrouching;
 
-  // 4. Create empty variables to hold the incoming data on the "Server" side
   uint32_t receivedId = 0;
   float receivedX = 0.0f;
   double receivedY = 0.0;
   bool receivedCrouching = false;
 
-  // 5. Deserialize (Unpack the envelope)
-  // CRITICAL: You must unpack in the EXACT same order you packed!
   msg >> receivedId >> receivedX >> receivedY >> receivedCrouching;
 
   std::cout << "--- RECEIVED DATA ---\n";
@@ -923,22 +665,16 @@ void message_test() {
   std::cout << "Y Coord:   " << receivedY << "\n";
   std::cout << "Crouching: " << receivedCrouching << "\n\n";
 
-  // 6. Test the buffer safety check!
-  // We already read all the bytes. If we try to read one more integer,
-  // it should fail gracefully and print your error message instead of crashing.
   std::cout << "--- TESTING BUFFER BOUNDARY ---\n";
   int data = 0;
   msg >> data;
 }
 
 void server_test() {
-  // --------------------- Client&Server ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ Client&Server ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
-  // ---------------------------------------------------------
-  // 1. SETUP AND START THE SERVER
-  // ---------------------------------------------------------
+
   Server server;
 
   server.defineAction(1, [&server](long long &clientID, const Message &msg) {
@@ -947,7 +683,6 @@ void server_test() {
     std::cout << "[Server] Received an int " << value << " from client "
               << clientID << "\n";
 
-    // Send back a message of type 3 with double the value
     Message replyMsg(3);
     replyMsg << (value * 2);
     server.sendTo(replyMsg, clientID);
@@ -968,13 +703,8 @@ void server_test() {
   });
 
   server.start(8080);
-
-  // Give the server thread a tiny fraction of a second to bind the port
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-  // ---------------------------------------------------------
-  // 2. SETUP AND CONNECT THE CLIENT
-  // ---------------------------------------------------------
   Client client;
 
   client.defineAction(3, [](const Message &msg) {
@@ -985,9 +715,6 @@ void server_test() {
 
   client.connect("localhost", 8080);
 
-  // ---------------------------------------------------------
-  // 3. SEND TEST MESSAGES
-  // ---------------------------------------------------------
   Message message1(1);
   message1 << 42;
   client.send(message1);
@@ -1000,12 +727,8 @@ void server_test() {
   }
   client.send(message2);
 
-  // ---------------------------------------------------------
-  // 4. UNIFIED UPDATE LOOP
-  // ---------------------------------------------------------
   bool quit = false;
   while (!quit) {
-    // Update both the server and the client!
     server.update();
     client.update();
 
@@ -1016,7 +739,6 @@ void server_test() {
 
     std::string input;
     std::getline(std::cin, input);
-
     std::transform(input.begin(), input.end(), input.begin(),
                    [](unsigned char c) { return std::tolower(c); });
 
@@ -1024,12 +746,10 @@ void server_test() {
       quit = true;
     }
   }
-
   client.disconnect();
 }
 
 void ivector2_test() {
-  // --------------------- IVECTOR2 ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ IVECTOR2 ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
@@ -1040,138 +760,131 @@ void ivector2_test() {
   std::cout << "Vec1 : " << vec1.x << " / " << vec1.y << std::endl;
   std::cout << "Vec2 : " << vec2.x << " / " << vec2.y << std::endl;
 
-  // Test operator overloads
   auto vecAdd = vec1 + vec2;
   std::cout << "vec1 + vec2 = (" << vecAdd.x << ", " << vecAdd.y << ")"
             << std::endl;
-  // Expected: vec1 + vec2 = (4, 6)
 
   auto vecSub = vec1 - vec2;
   std::cout << "vec1 - vec2 = (" << vecSub.x << ", " << vecSub.y << ")"
             << std::endl;
-  // Expected: vec1 - vec2 = (2, 2)
 
   auto vecMul = vec1 * vec2;
   std::cout << "vec1 * vec2 = (" << vecMul.x << ", " << vecMul.y << ")"
             << std::endl;
-  // Expected: vec1 * vec2 = (3, 8)
 
   auto vecDiv = vec1 / vec2;
   std::cout << "vec1 / vec2 = (" << vecDiv.x << ", " << vecDiv.y << ")"
             << std::endl;
-  // Expected: vec1 / vec2 = (3, 2)
 
   bool isEqual = vec1 == vec2;
-  std::cout << "vec1 == vec2: " << (isEqual ? "true" : "false") << ""
-            << std::endl;
-  // Expected: vec1 == vec2: false
+  std::cout << "vec1 == vec2: " << (isEqual ? "true" : "false") << std::endl;
 
   bool isNotEqual = vec1 != vec2;
-  std::cout << "vec1 != vec2: " << (isNotEqual ? "true" : "false") << ""
-            << std::endl;
-  // Expected: vec1 != vec2: true
+  std::cout << "vec1 != vec2: " << (isNotEqual ? "true" : "false") << std::endl;
 
-  // Test additional methods
   float len = vec1.length();
-  std::cout << "Length of vec1: " << len << "" << std::endl;
-  // Expected: Length of vec1: 5 (or sqrt(3*3 + 4*4))
+  std::cout << "Length of vec1: " << len << std::endl;
 
   auto normVec = vec1.normalize();
   std::cout << "Normalized vec1 = (" << normVec.x << ", " << normVec.y << ")"
             << std::endl;
-  // Expected: Normalized vec1 = (0.6, 0.8)
 
   float dotProd = vec1.dot(vec2);
-  std::cout << "Dot product of vec1 and vec2: " << dotProd << "" << std::endl;
-  // Expected: Dot product of vec1 and vec2: 11 (or 3*1 + 4*2)
+  std::cout << "Dot product of vec1 and vec2: " << dotProd << std::endl;
 
   auto crossProd = vec1.cross();
   std::cout << "Cross product of vec1: (" << crossProd.x << ", " << crossProd.y
             << ")" << std::endl;
-  // Expected: Cross product of vec1: (some_value, some_value)
+
+  // what about the 0 vector?
+  IVector2<int> vec3(0, 0);
+  // test the default constructor
+  IVector2<int> vec4{};
+  auto normVec3 = vec3.normalize();
+  std::cout << "Normalized zero vec = (" << normVec3.x << ", " << normVec3.y
+            << ")" << std::endl;
+  crossProd = vec3.cross();
+  std::cout << "Cross product of zero vec: (" << crossProd.x << ", "
+            << crossProd.y << ")" << std::endl;
+  dotProd = vec3.dot(vec3);
+  std::cout << "Dot product of zero vec: " << dotProd << std::endl;
+  len = vec3.length();
+  std::cout << "Length of zero vec: " << len << std::endl;
 }
 
 void ivector3_test() {
-
-  // --------------------- IVECTOR3 ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ IVECTOR3 ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
   {
-
     IVector3<int> vec1(3, 4, 1);
     IVector3<int> vec2(1, 2, 3);
-
+    IVector3<int> zeroVec{};
     std::cout << "Vec1 : " << vec1.x << " / " << vec1.y << " / " << vec1.z
               << std::endl;
     std::cout << "Vec2 : " << vec2.x << " / " << vec2.y << " / " << vec2.z
               << std::endl;
 
-    // Test operator overloads
     auto vecAdd = vec1 + vec2;
     std::cout << "vec1 + vec2 = (" << vecAdd.x << ", " << vecAdd.y << ", "
               << vecAdd.z << ")" << std::endl;
-    // Expected: vec1 + vec2 = (4, 6, 4)
 
     auto vecSub = vec1 - vec2;
     std::cout << "vec1 - vec2 = (" << vecSub.x << ", " << vecSub.y << ", "
               << vecSub.z << ")" << std::endl;
-    // Expected: vec1 - vec2 = (2, 2, -2)
 
     auto vecMul = vec1 * vec2;
     std::cout << "vec1 * vec2 = (" << vecMul.x << ", " << vecMul.y << ", "
               << vecMul.z << ")" << std::endl;
-    // Expected: vec1 * vec2 = (3, 8, 3)
 
     auto vecDiv = vec1 / vec2;
     std::cout << "vec1 / vec2 = (" << vecDiv.x << ", " << vecDiv.y << ", "
               << vecDiv.z << ")" << std::endl;
-    // Expected: vec1 / vec2 = (3, 2, 0)
 
     bool isEqual = vec1 == vec2;
     std::cout << "vec1 == vec2: " << (isEqual ? "true" : "false") << std::endl;
-    // Expected: vec1 == vec2: false
 
     bool isNotEqual = vec1 != vec2;
     std::cout << "vec1 != vec2: " << (isNotEqual ? "true" : "false")
               << std::endl;
-    // Expected: vec1 != vec2: true
 
-    // Test additional methods
     float len = vec1.length();
     std::cout << "Length of vec1: " << len << std::endl;
-    // Expected: Length of vec1: 5.099 (or sqrt(3*3 + 4*4 + 1*1))
 
     auto normVec = vec1.normalize();
     std::cout << "Normalized vec1 = (" << normVec.x << ", " << normVec.y << ", "
               << normVec.z << ")" << std::endl;
-    // Expected: Normalized vec1 = (some_value, some_value, some_value)
 
     float dotProd = vec1.dot(vec2);
     std::cout << "Dot product of vec1 and vec2: " << dotProd << std::endl;
-    // Expected: Dot product of vec1 and vec2: 14 (or 3*1 + 4*2 + 1*3)
 
     auto crossProd = vec1.cross(vec2);
     std::cout << "Cross product of vec1 and vec2: (" << crossProd.x << ", "
               << crossProd.y << ", " << crossProd.z << ")" << std::endl;
-    // Expected: Cross product of vec1 and vec2: (some_value, some_value,
-    // some_value)
+    len = zeroVec.length();
+    std::cout << "Length of vec1: " << len << std::endl;
+
+    normVec = zeroVec.normalize();
+    std::cout << "Normalized vec1 = (" << normVec.x << ", " << normVec.y << ", "
+              << normVec.z << ")" << std::endl;
+
+    dotProd = zeroVec.dot(vec2);
+    std::cout << "Dot product of vec1 and vec2: " << dotProd << std::endl;
+
+    crossProd = zeroVec.cross(vec2);
+    std::cout << "Cross product of vec1 and vec2: (" << crossProd.x << ", "
+              << crossProd.y << ", " << crossProd.z << ")" << std::endl;
   }
 }
 
 void random_2D_coordinate_generator_test() {
-  // --------------------- Random2DCoordinateGenerator
-  // ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ Random2DCoordinateGenerator ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
   Random2DCoordinateGenerator randomGenerator(1);
 
-  // Store a list of coordinates to test
   std::vector<std::pair<long long, long long>> coordinates = {
       {5, 3}, {7, 2}, {1, 9}, {0, 0}};
-
-  // Store the random numbers generated the first time
   std::vector<long long> firstGenerated;
 
   std::cout << "First round of generation:" << std::endl;
@@ -1194,10 +907,9 @@ void random_2D_coordinate_generator_test() {
     std::cout << "Random number using coordinates (" << x << ", " << y
               << "): " << randomNumber << std::endl;
 
-    // Check if the number is the same as generated the first time
     if (randomNumber == firstGenerated[i]) {
       std::cout << "  => Matches the previous generated value. Consistent!"
-                << std::endl; // Expected: Should always match
+                << std::endl;
     } else {
       std::cout
           << "  => Does not match the previous generated value. Inconsistent!"
@@ -1208,7 +920,6 @@ void random_2D_coordinate_generator_test() {
 }
 
 void perlin_noise2D_test() {
-  // --------------------- PerlinNoise2D ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ PerlinNoise2D ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
@@ -1223,10 +934,9 @@ void perlin_noise2D_test() {
 
   for (int y = 0; y < gridSize; ++y) {
     for (int x = 0; x < gridSize; ++x) {
-      float sample =
-          perlin.sample(x * 0.3f, y * 0.3f);  // Adjust these factors as needed
-      sample = (sample + 1) / 2;              // Map from [-1, 1] to [0, 1]
-      int charIndex = std::round(sample * 9); // Map from [0, 1] to [0, 9]
+      float sample = perlin.sample(x * 0.3f, y * 0.3f);
+      sample = (sample + 1) / 2;
+      int charIndex = std::round(sample * 9);
 
       std::cout << visualChars[charIndex] << " ";
     }
@@ -1234,40 +944,28 @@ void perlin_noise2D_test() {
   }
 }
 
-// bonus
 void ppm_image_exporter_test() {
-  // --------------------- PPMImageExporter ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ PPMImageExporter ===========\n";
   std::cout << "=== 1. Starting ===\n\n";
   PerlinNoise2D perlin(42);
 
-  // Create an exporter for a 500x500 pixel image
   PPMImageExporter exporter("terrain_map.ppm", 500, 500);
-
-  // Generate it!
   exporter.generateTerrain(perlin, 0.03f);
 }
 
 void observable_value_test() {
-  // --------------------- ObservableValue ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ ObservableValue ===========\n";
   std::cout << "--- Testing ObservableValue ---" << std::endl;
   {
-
-    // 1. Create our observable variable starting at 100
     ObservableValue<int> playerHealth(100);
 
-    // 2. Subscribe the UI System
-    // (Using a lambda function for a quick, inline callback)
     playerHealth.subscribe([](const int &newHealth) {
       std::cout << "[UI System] Health Bar updated to: " << newHealth << " HP"
                 << std::endl;
     });
 
-    // 3. Subscribe the Audio System
-    // (It only reacts if health drops dangerously low)
     playerHealth.subscribe([](const int &newHealth) {
       if (newHealth <= 20) {
         std::cout
@@ -1277,45 +975,38 @@ void observable_value_test() {
     });
 
     std::cout << "\nPlayer takes 10 damage..." << std::endl;
-    playerHealth.set(90); // Triggers UI update
+    playerHealth.set(90);
 
     std::cout << "\nPlayer finds a small potion..." << std::endl;
-    playerHealth = 95; // Uses our overloaded operator to trigger UI update
+    playerHealth = 95;
 
     std::cout << "\nPlayer steps on a massive trap!" << std::endl;
-    playerHealth = 15; // Triggers BOTH the UI update AND the Audio siren!
+    playerHealth = 15;
   }
 }
 
 void timer_test() {
-  // --------------------- Timer ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ Timer ===========\n" << std::endl;
 
-  // Set a timer for 1 second (1000 ms)
   Timer myTimer(1000);
-
   std::cout << "Timer set. Waiting for timeout..." << std::endl;
 
   while (!myTimer.hasTimedOut()) {
-    std::cout << "." << std::flush; // flush ensures it prints immediately
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(100)); // Sleep for 1/10th of a sec
+    std::cout << "." << std::flush;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   std::cout << "BEEP! Timer has timed out!" << std::endl;
 }
 
 void chronometer_test() {
-  // --------------------- chronometer ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ chronometer ===========\n" << std::endl;
   Chronometer chrono;
 
   chrono.start();
   std::cout << "Chronometer started. Doing some 'heavy' work..." << std::endl;
-
-  // Simulate doing something that takes time (e.g., 1.5 seconds)
   std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
   chrono.stop();
@@ -1324,48 +1015,34 @@ void chronometer_test() {
             << " seconds.\n\n";
 }
 
-// for the command pattern
-// --- Receiver Class 1 ---
-class PlayerReceiver {
-public:
-  void jump() { std::cout << "[Player] Jumped into the air!" << std::endl; }
-};
-
-// --- Receiver Class 2 ---
-class AudioSystemReceiver {
-public:
-  void playJumpSound() {
-    std::cout << "[Audio] PLAYING: 'boing.wav'" << std::endl;
-  }
-};
 void command_pattern_test() {
-  // --------------------- Templated Command Pattern ---------------------
   std::cout << "\n\n================================\n";
   std::cout << "============ Templated Command Pattern ===========\n"
             << std::endl;
 
-  // 1. Create our two entirely different objects
   PlayerReceiver myPlayer;
   AudioSystemReceiver myAudio;
-
-  // 2. Create a single queue that holds base Command pointers
   std::vector<std::unique_ptr<Command>> commandQueue;
 
-  // 3. Wrap functions from DIFFERENT classes and push them to the SAME queue
-  // Notice how we specify <Player> and pass &Player::jump
   commandQueue.push_back(std::make_unique<SimpleCommand<PlayerReceiver>>(
       &myPlayer, &PlayerReceiver::jump));
-
-  // Notice how we specify <AudioSystem> and pass &AudioSystem::playJumpSound
   commandQueue.push_back(std::make_unique<SimpleCommand<AudioSystemReceiver>>(
       &myAudio, &AudioSystemReceiver::playJumpSound));
 
-  // 4. The queue doesn't care what they are, it just executes them!
   std::cout << "Executing queue...\n\n";
   for (const auto &cmd : commandQueue) {
-    cmd->execute(); // Automatically calls the right function on the right
-                    // object
+    cmd->execute();
   }
+  std::cout << "\n=== Testing Null Receiver Edge Case ===\n";
+  std::cout << "Creating a SimpleCommand with a nullptr receiver...\n";
+
+  // Pass nullptr instead of &myPlayer
+  auto nullSimpleCmd = std::make_unique<SimpleCommand<PlayerReceiver>>(
+      nullptr, &PlayerReceiver::jump);
+
+  std::cout << "Executing null simple command...\n";
+  nullSimpleCmd->execute(); // Should safely bypass thanks to the if-check!
+  std::cout << "  -> Success! Safe execution, no crash.\n";
 }
 
 void lambda_command_test() {
@@ -1374,74 +1051,41 @@ void lambda_command_test() {
 
   PlayerReceiver myPlayer;
   AudioSystemReceiver myAudio;
-
   std::vector<std::unique_ptr<Command>> commandQueue;
 
-  // 1. Wrap the Player jump in a Lambda
-  // [&myPlayer] means "capture myPlayer by reference so we can use it inside"
   commandQueue.push_back(
       std::make_unique<LambdaCommand>([&myPlayer]() { myPlayer.jump(); }));
-
-  // 2. Wrap the Audio sound in a Lambda
   commandQueue.push_back(std::make_unique<LambdaCommand>(
       [&myAudio]() { myAudio.playJumpSound(); }));
 
-  // 3. The true power of Lambdas: We can pass arguments instantly!
-  // The Wikipedia version couldn't do this without massive rewrites.
   int damage = 50;
   commandQueue.push_back(std::make_unique<LambdaCommand>([damage]() {
     std::cout << "[System] Dealt " << damage << " damage using a lambda!"
               << std::endl;
   }));
 
-  // 4. Execute the queue
   std::cout << "Executing lambda queue...\n\n";
   for (const auto &cmd : commandQueue) {
     cmd->execute();
   }
 }
-class GameEngine {
-public:
-  // Signature 1: Takes NO arguments, returns void
-  void saveGame() { std::cout << "Game saved." << std::endl; }
 
-  // Signature 2: Takes TWO arguments (string, float), returns void
-  void playMusic(std::string track, float volume) {
-    std::cout << "Playing " << track << " at volume " << volume << std::endl;
-  }
-
-  // Signature 3: Takes ONE argument (int), returns an INT!
-  int calculateDamage(int baseDamage) {
-    std::cout << "Calculated damage: " << baseDamage * 2 << std::endl;
-    return baseDamage * 2;
-  }
-};
-
+// this is for the bonus command design pattern
 void mixed_signature_test() {
   GameEngine engine;
   std::vector<std::unique_ptr<Command>> queue;
 
-  // 1. Wrapping a zero-argument function
   queue.push_back(
       std::make_unique<LambdaCommand>([&engine]() { engine.saveGame(); }));
-
-  // 2. Wrapping a two-argument function!
-  // We just capture the arguments right here in the lambda.
   queue.push_back(std::make_unique<LambdaCommand>(
       [&engine]() { engine.playMusic("boss_theme.mp3", 0.8f); }));
 
-  // 3. Wrapping a function that takes arguments AND returns a value!
-  // The queue doesn't care that it returns an int, the lambda just eats the
-  // return value.
   queue.push_back(std::make_unique<LambdaCommand>([&engine]() {
     int result = engine.calculateDamage(50);
-    // We can even do extra logic inside the lambda!
     if (result > 90)
       std::cout << "Critical Hit!\n";
   }));
 
-  // 4. The queue executes them all blindly.
-  // It has NO IDEA that they have different signatures underneath.
   std::cout << "Executing Mixed Queue...\n";
   for (const auto &cmd : queue) {
     cmd->execute();

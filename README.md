@@ -2556,3 +2556,36 @@ When you write: `[&engine]() { engine.playMusic("boss_theme.mp3", 0.8f); }`
 You are creating a block of code that *takes* zero arguments to run. The fact that *inside* the block it calls a function requiring a string and a float is completely hidden from the outside world.
 
 So your `std::vector` just sees a neat row of zero-argument commands, completely unaware of the complex, varied function signatures hiding inside each one!
+
+
+This is one of the most famous, hilarious, and frustrating quirks in the entire history of C++!
+
+It is so infamous that the creator of C++ (Bjarne Stroustrup) and the community actually gave it an official name: **The Most Vexing Parse**.
+
+### What is happening?
+
+You absolutely *did* implement the default constructor correctly. The problem is how the C++ compiler reads English.
+
+When the compiler sees this line:
+`IVector2<int> vec4();`
+
+It does **not** see an object being created. Instead, it thinks you are writing a **function declaration**. It reads it as: *"Hey compiler, later in this program, I am going to write a function named `vec4` that takes zero arguments `()` and returns an `IVector2<int>`."*
+
+Because you told the compiler to treat all warnings as errors (`-Werror`), it stops and says: *"Wait, I think you meant to make a variable, not a function! (vexing-parse)"*
+
+### How to fix it (Two Options)
+
+**Option 1: The Old-School Way (Remove the parentheses)**
+If you want to use the default constructor, you just leave the parentheses off entirely.
+
+```cpp
+IVector2<int> vec4; // Works perfectly! Calls the default constructor.
+
+```
+
+**Option 2: The Modern C++ Way (Curly Braces)**
+Since C++11, the absolute best practice to avoid the "Most Vexing Parse" is to use **Uniform Initialization** with curly braces instead of parentheses. The compiler can never confuse curly braces with a function declaration.
+
+```cpp
+IVector2<int> vec4{}; // Best practice! 
+```

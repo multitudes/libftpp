@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstring>
-#include <iostream>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -32,8 +32,7 @@ public:
                   "DataBuffer ERROR: Type is not trivially copyable! You must "
                   "write a custom overload.");
     if (_readPos + sizeof(T) > _buffer.size()) {
-      std::cout << "not enough bytes to read!" << std::endl;
-      return *this;
+      throw std::runtime_error("not enough bytes to read!");
     }
     std::memcpy(&data, _buffer.data() + _readPos, sizeof(T));
     _readPos += sizeof(T);
@@ -58,8 +57,7 @@ public:
     *this >> len; // Use our own template to read the size_t length
 
     if (_readPos + len > _buffer.size()) {
-      std::cout << "not enough bytes to read string!" << std::endl;
-      return *this;
+      throw std::runtime_error("not enough bytes to read!");
     }
 
     // Assign the characters directly into the string

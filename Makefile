@@ -68,7 +68,7 @@ re: fclean all
 test: all
 	@echo "=================="
 	@echo "Compiling test executable using $(NAME)..."
-	$(CXX) $(CXXFLAGS) main.cpp $(NAME) -o test
+	$(CXX) $(CXXFLAGS) main.cpp test.cpp $(NAME) -o test
 	@echo "Running test..."
 	@echo "=================="
 	./test

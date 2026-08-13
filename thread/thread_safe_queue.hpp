@@ -44,7 +44,7 @@ public:
     // Subject Hint: Must throw an exception if empty!
     if (_q.empty()) {
       throw std::runtime_error(
-          "Error: Attempted to pop_front     from an empty queue!");
+          "Error: Attempted to pop_front from an empty queue!");
     }
     TType value = _q.front();
     _q.pop_front();

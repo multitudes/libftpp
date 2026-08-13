@@ -16,5 +16,9 @@ private:
 public:
   SimpleCommand(Receiver *receiver, Action action)
       : _receiver(receiver), _action(action) {};
-  void execute() override { (_receiver->*_action)(); }
+  void execute() override {
+    if (_receiver && _action) { // Safely check both pointers
+      (_receiver->*_action)();
+    }
+  }
 };
