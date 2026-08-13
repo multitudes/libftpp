@@ -7,8 +7,8 @@
 // Main Test
 // =============================================================================
 int main() {
-  // pool_test();
-  // std::cout << "\n\033[1;32m[✔] pool_test executed!\033[0m\n";
+  pool_test();
+  std::cout << "\n\033[1;32m[✔] pool_test executed!\033[0m\n";
   // databuffer_test();
   // std::cout << "\n\033[1;32m[✔] databuffer_test executed!\033[0m\n";
   // memento_test();
@@ -51,11 +51,11 @@ int main() {
   // std::cout << "\n\033[1;32m[✔] timer_test executed!\033[0m\n";
   // chronometer_test();
   // std::cout << "\n\033[1;32m[✔] chronometer_test executed!\033[0m\n";
-  command_pattern_test();
-  std::cout << "\n\033[1;32m[✔] command_pattern_test executed!\033[0m\n";
+  // command_pattern_test();
+  // std::cout << "\n\033[1;32m[✔] command_pattern_test executed!\033[0m\n";
   // mixed_signature_test();
   // std::cout << "\n\033[1;32m[✔] mixed_signature_test executed!\033[0m\n";
-  lambda_command_test();
+  // lambda_command_test();
   // std::cout << "\n\033[1;32m[✔] mixed_signature_test executed!\033[0m\n";
   std::cout << "\n\n================================\n";
   std::cout << "============ END ===========\n";

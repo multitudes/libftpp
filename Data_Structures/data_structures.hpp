@@ -89,9 +89,8 @@ public:
       _ptr->~TType();
     }
   }
-  // dont allow copies just for safety!
-  // Object(const Object &other) = delete;
-  // Object &operator=(const Object &other) = delete;
+  // dont allow assignment copies
+  Object &operator=(const Object &other) = delete;
 
   // Allows the user to say: if (myObject) { ... }
   // need explicit to avoid unwanted behavior see read me

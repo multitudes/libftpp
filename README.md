@@ -1,66 +1,78 @@
 # 42-libftpp
 
+This is a school project for 42 focused on exploring advanced C++ concepts. The goal is to build a library of reusable components that can be carried over into future projects. Throughout the project, we implement standard design patterns—like Singleton, Observer, and Command—to better understand how larger software architectures are structured. It also covers multi-threading through the creation of thread-safe data structures, and introduces basic networking by building a simple client and server.
+
 ## What is a Pool?
 
 In software engineering, an Object Pool is a creational design pattern used to manage performance and memory.
 Dynamically allocating (using new) and deallocating (using delete) memory during runtime is computationally expensive. If you are building a system that frequently creates and destroys small objects—like bullets in a video game, or network packets—that overhead will slow your program down.
-A Pool solves this by pre-allocating a large batch (a "pool") of memory for these objects upfront. According to the subject, your Pool class "manages a collection of reusable templated TType objects". Instead of creating a new object from scratch, you "acquire" an existing, unused chunk of memory from the pool, construct your object there, and when you are done, you give the memory back to the pool to be reused.  
+A Pool solves this by pre-allocating a large batch (a "pool") of memory for these objects upfront. According to the project requirements (also called subject in 42 jargon), the Pool class "manages a collection of reusable templated TType objects". Instead of creating a new object from scratch, we "acquire" an existing, unused chunk of memory from the pool, construct our object there, and when we are done, we give the memory back to the pool to be reused.  
 Crucially, when the object is released back to the pool, the subject requires "calling the destructor of the TType object but without deallocating the memory". The memory stays reserved for the next time you need it.  
-
-- Variadic Templates and Perfect Forwarding: The subject asks to implement the acquire method 
+We will implement these methods:
 
 ```cpp
 void resize(const size_t& numberOfObjectStored):
 
-// Allocates a certain number of TType objects withing the Pool.
+// Allocates a certain number of TType objects within the Pool.
 template<typename ... TArgs> Pool::Object<TType>
-acquire(TArgs&& p_args): 
+acquire(TArgs&& p_args){...}
 
 // Creates a Pool::Object containing a pre-allocated object, 
 // using the constructor with parameters as defined by TArgs definition.
 
 // Pool::Object :
--TType* operator -> (): 
+-TType* operator -> (){...}
 // Returns the pointer stored within the Pool::Object.
 ```
 
-RAII (Resource Acquisition Is Initialization): The subject states that "Every requests and releases of a pre-allocated objects must be handled by Pool::Object, not by the user!". The Pool::Object acts as a custom smart wrapper. When a user requests an object, they get a Pool::Object. When that Pool::Object goes out of scope, its destructor should automatically handle returning the resource to the pool.
+### Implementing RAII (Resource Acquisition Is Initialization)
+
+Every requests and releases of a pre-allocated objects must be handled by Pool::Object, not by the user. The Pool::Object acts as a custom smart wrapper. When a user requests an object, they get a Pool::Object. When that Pool::Object goes out of scope, its destructor should automatically handle returning the resource to the pool.
 
 TType is the "What": This is the type of the final object you are storing in the pool (e.g., a Player, a Bullet, or a std::string).  
 TArgs are the "Ingredients": This represents the arguments passed into the constructor of TType.  
 
+### TArgs or Variadic Templates and Forwarding References
 
+Variadic Templates is useful to create a function taking any number of arguments.
+There are three distinct options all valid:
 
-## NEW in CPP11
+- Pass by Value (Copies everything)
 
-You have spotted one of the most powerful—and notoriously confusing—features introduced in C++11!
+```cpp
+template <typename... Args>
+void doSomething(Args... args) { ... } 
+// If you pass a massive string here, it makes a full copy of it.
+```
 
-While `&&` normally means an **rvalue reference** (which is used for moving data rather than copying it), when it is attached to a deduced template type like `TArgs`, it transforms into something entirely different. It becomes a **Forwarding Reference** (also famously called a "Universal Reference").
+- Pass by Const Reference
+Safe, no copies, but it completely breaks if the user passes a temporary value (an rvalue). You wouldn't be able to do `pool.acquire(5)`, because you can't bind a standard reference to a raw number.
 
-Here is exactly why you need it in your `acquire` function.
+```cpp
+template <typename... Args>
+void doSomething(const Args&... args) { ... }
+// Great for printing or reading. Nothing is copied, but you can't modify them.
+```
 
-### The Problem it Solves: Perfect Forwarding
+- Pass by Forwarding Reference (&&)
 
-Your `acquire` function is a middleman. Its only job is to take arguments from the user and hand them *exactly as they are* to the `TType` constructor.
+```cpp
+template <typename... Args>
+void doSomething(Args&&... args) { ... }
+```
 
-Without `&&`, you would run into a wall depending on how the user calls your function:
+When you attach && to a template parameter, it becomes a "Forwarding Reference" (often called a Universal Reference).
 
-1. **Pass by Value (`TArgs... p_args`)**: This would make a full copy of every argument. If the user passes a massive data structure, copying it just to hand it to the constructor is a huge performance hit.
-2. **Pass by Reference (`TArgs&... p_args`)**: This avoids copies, but it completely breaks if the user passes a temporary value (an rvalue). You wouldn't be able to do `pool.acquire(5)`, because you can't bind a standard reference to a raw number.
-3. **Pass by Const Reference (`const TArgs&... p_args`)**: This lets you pass temporaries, but it strips away the ability to use "move semantics." If the user wants to efficiently move data into the object, the `const` kills that optimization.
+If the user passes a normal variable (l-value), the && collapses into a standard reference &. If the user passes a temporary variable (like "Hello" or 5), it stays as &&.
 
-### The Solution: `TArgs&&`
+The `acquire` function only job is to take arguments from the user and hand them *exactly as they are* to the `TType` constructor.
 
-When the compiler sees `TArgs&&` in a template, it uses a trick called "reference collapsing." It looks at what the user actually passed and adapts perfectly:
+When the compiler sees `TArgs&&` in a template, it uses a trick called "reference collapsing." It looks at what the user actually passed and adapts:
 
-* If the user passes a normal, named variable (an lvalue), `TArgs&&` collapses into a normal reference (`&`).
-* If the user passes a temporary value (an rvalue, like a raw `5`), `TArgs&&` remains an rvalue reference (`&&`).
+- If the user passes a normal, named variable (an lvalue), `TArgs&&` collapses into a normal reference (`&`).
+- If the user passes a temporary value (an rvalue, like a raw `5`), `TArgs&&` remains an rvalue reference (`&&`).
 
-It acts as a perfect mold of whatever was passed to it.
-
-### How You Actually Use It
-
-To make this "Perfect Forwarding" actually work inside your function body, you must pair `&&` with a standard library tool called `std::forward`.
+To make this "Perfect Forwarding" actually work inside the function body, we must pair `&&` with a standard library tool called `std::forward`.
 
 When you get to writing the placement `new` inside your `acquire` method, it will look exactly like this:
 
@@ -71,33 +83,25 @@ When you get to writing the placement `new` inside your `acquire` method, it wil
 
 template <typename... TArgs> 
 Object acquire(TArgs&&... p_args) {
-    // 1. Find your raw memory address
-    void* memory_address = /* your logic here */;
+    // 1. Find the raw memory address
+    void* memory_address = ...
 
     // 2. Construct the object using placement new and perfect forwarding
     TType* constructed_object = new (memory_address) TType(std::forward<TArgs>(p_args)...);
 
     // 3. Return the Object wrapper
-    // ...
 }
-
 ```
 
-By using `TArgs&&` in the parameter list and `std::forward<TArgs>(p_args)...` in the function body, you guarantee that the arguments arrive at the constructor in the exact same state (copyable, movable, const, or non-const) as when the user passed them.
+By using `TArgs&&` in the parameter list and `std::forward<TArgs>(p_args)...` in the function body, we guarantee that the arguments arrive at the constructor in the exact same state (copyable, movable, const, or non-const) as when the user passed them.
 
-Awesome, I'm glad it compiled and works!
+## Using Operator Overloading `()`
 
-The line `TType *operator->() { return _ptr; }` is a concept in C++ called **Operator Overloading**. It is what makes your custom `Pool::Object` behave like a real, built-in pointer.
-
-Here is exactly why you need it and how it works.
-
-### The Problem: The Wrapper Barrier
-
-When `acquire()` returns a `Pool::Object`, the user receives a wrapper, not the raw `Particle*` (or whatever `TType` is).
-
+The line `TType *operator->() { return _ptr; }` is what makes the custom `Pool::Object` behave like a real, built-in pointer.  
+When `acquire()` returns a `Pool::Object`, the user receives a wrapper, not the raw `Particle*` (or whatever `TType` is).  
 If the user wants to call a method on their particle, like `printPosition()`, the compiler will get confused if they just type `myObject->printPosition()`. The compiler sees that `myObject` is a `Pool::Object` class, not a pointer, and it doesn't have a `printPosition()` method inside it.
 
-Without overloading the arrow operator, you would have to force the user to do something ugly and clunky like this:
+Without overloading the arrow operator, we would have to force the user to do something ugly and clunky like this:
 
 ```cpp
 // If we used a normal getter method like getPtr()
@@ -105,9 +109,7 @@ myObject.getPtr()->printPosition();
 
 ```
 
-### The Solution: `operator->()`
-
-By defining `TType *operator->()`, you are teaching the C++ compiler a new trick. You are saying: *"If anyone ever uses the `->` operator directly on my `Pool::Object`, automatically reach inside and give them the raw `_ptr` instead."*
+By defining `TType *operator->()`, we are saying: *"If anyone ever uses the `->` operator directly on my `Pool::Object`, automatically reach inside and give them the raw `_ptr` instead."*
 
 Because of this overload, the user can write code that feels completely natural, exactly as if they were holding a real pointer:
 
@@ -120,20 +122,15 @@ myObject.operator->()->printPosition();
 
 ```
 
-### Required by the Subject
+This technique is exactly how standard library smart pointers (like `std::unique_ptr` and `std::shared_ptr`) work under the hood.
 
-This feature is actually a strict requirement for the project. The subject explicitly dictates that your `Pool::Object` must include `- TType* operator -> (): Returns the pointer stored withing the Pool:: Object.`.
-
-This technique is exactly how standard library smart pointers (like `std::unique_ptr` and `std::shared_ptr`) work under the hood. You have essentially built your own custom smart pointer!
-
-
-### Why `explicit` is critical for `operator bool()`
+### Why use `explicit` for `operator bool()`
 
 In C++, compilers love to automatically convert types (called **implicit conversion**) to try and make your code compile.
 
 If you just write `operator bool() const` without the `explicit` keyword, your object can be secretly treated as a `bool` (which is essentially a `0` or `1`) anywhere in your program.
 
-Here is the nightmare scenario of what happens **without** `explicit`:
+Here is the scenario of what happens without `explicit`:
 
 ```cpp
 auto myObject = particlePool.acquire("Alpha", 1, 2, 3);
@@ -149,7 +146,6 @@ someFunctionExpectingInt(myObject);
 
 The compiler won't warn you; it will just silently convert your custom `Pool::Object` into a `1` and continue running, creating a massive logical bug.
 
-### What `explicit` fixes
 
 By adding `explicit`:
 
@@ -158,17 +154,9 @@ explicit operator bool() const { return _ptr != nullptr; }
 
 ```
 
-You are telling the compiler: *"You are only allowed to convert this to a boolean in strict, explicit boolean contexts."*
+We are telling the compiler: *"You are only allowed to convert this to a boolean in strict, explicit boolean contexts."*
 
-With `explicit`, the bad math code (`myObject + 100`) will immediately throw a compile-time error. But it will still perfectly allow the safe, logical checks you actually want:
-
-```cpp
-if (myObject) { ... }           // Allowed!
-while (myObject) { ... }        // Allowed!
-if (!myObject || otherThing)    // Allowed!
-
-```
-
+With `explicit`, the bad math code (`myObject + 100`) will immediately throw a compile-time error.
 
 ## DataBuffer, a binary serialization buffer.
 
@@ -2589,3 +2577,12 @@ Since C++11, the absolute best practice to avoid the "Most Vexing Parse" is to u
 ```cpp
 IVector2<int> vec4{}; // Best practice! 
 ```
+
+## Links and Resources
+
+[https://en.wikipedia.org/wiki/Design_Patterns](https://en.wikipedia.org/wiki/Design_Patterns)
+[https://en.wikipedia.org/wiki/Memento_pattern](https://en.wikipedia.org/wiki/Memento_pattern)
+[https://en.wikipedia.org/wiki/Command_pattern](https://en.wikipedia.org/wiki/Command_pattern)
+[https://en.wikipedia.org/wiki/Observer_pattern](https://en.wikipedia.org/wiki/Observer_pattern)
+[https://en.wikipedia.org/wiki/State_pattern](https://en.wikipedia.org/wiki/State_pattern)
+[https://en.wikipedia.org/wiki/Singleton_pattern](https://en.wikipedia.org/wiki/Singleton_pattern)
