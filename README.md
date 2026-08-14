@@ -2,39 +2,42 @@
 
 This is a school project for 42 focused on exploring advanced C++ concepts. The goal is to build a library of reusable components that can be carried over into future projects. Throughout the project, we implement standard design patterns—like Singleton, Observer, and Command—to better understand how larger software architectures are structured. It also covers multi-threading through the creation of thread-safe data structures, and introduces basic networking by building a simple client and server.
 
-## What is a Pool?
+## Object Pool
 
-In software engineering, an Object Pool is a creational design pattern used to manage performance and memory.
-Dynamically allocating (using new) and deallocating (using delete) memory during runtime is computationally expensive. If you are building a system that frequently creates and destroys small objects—like bullets in a video game, or network packets—that overhead will slow your program down.
-A Pool solves this by pre-allocating a large batch (a "pool") of memory for these objects upfront. According to the project requirements (also called subject in 42 jargon), the Pool class "manages a collection of reusable templated TType objects". Instead of creating a new object from scratch, we "acquire" an existing, unused chunk of memory from the pool, construct our object there, and when we are done, we give the memory back to the pool to be reused.  
-Crucially, when the object is released back to the pool, the subject requires "calling the destructor of the TType object but without deallocating the memory". The memory stays reserved for the next time you need it.  
+> The object pool pattern is a software creational design pattern that uses a set of initialized objects kept ready to use – a "pool" – rather than allocating and destroying them on demand. A client of the pool will request an object from the pool and perform operations on the returned object. When the client has finished, it returns the object to the pool rather than destroying it; this can be done manually or automatically. - Wiki
+
+Object pools are primarily used for performance: in some circumstances, object pools significantly improve performance. Object pools complicate object lifetime, as objects obtained from and returned to a pool are not actually created or destroyed at this time, and thus require care in implementation.
+Dynamically allocating (using new) and deallocating (using delete) memory during runtime is computationally expensive.  
+A Pool solves this by pre-allocating a large batch (a "pool") of memory for these objects upfront. According to the project requirements the Pool class "manages a collection of reusable templated TType objects". Instead of creating a new object from scratch, we "acquire" an existing, unused chunk of memory from the pool, construct our object there, and when we are done, we give the memory back to the pool to be reused.  
+Crucially, when the object is released back to the pool, the subject requires "calling the destructor of the TType object but without deallocating the memory". The memory stays reserved for the next time we need it.  
 We will implement these methods:
 
 ```cpp
+// will be possible to resize the pool only if empty!
 void resize(const size_t& numberOfObjectStored):
 
-// Allocates a certain number of TType objects within the Pool.
+// Allocates a certain number of TType objects 
+// within the memory allocated in the Pool.
 template<typename ... TArgs> Pool::Object<TType>
 acquire(TArgs&& p_args){...}
 
-// Creates a Pool::Object containing a pre-allocated object, 
-// using the constructor with parameters as defined by TArgs definition.
+// Creates a Pool::Object containing a pre-allocated size for n objects
+Pool(size_t size) {}
 
-// Pool::Object :
--TType* operator -> (){...}
+// overloading the `->` 
 // Returns the pointer stored within the Pool::Object.
+-TType* operator -> (){...}
 ```
 
 ### Implementing RAII (Resource Acquisition Is Initialization)
 
 Every requests and releases of a pre-allocated objects must be handled by Pool::Object, not by the user. The Pool::Object acts as a custom smart wrapper. When a user requests an object, they get a Pool::Object. When that Pool::Object goes out of scope, its destructor should automatically handle returning the resource to the pool.
 
-TType is the "What": This is the type of the final object you are storing in the pool (e.g., a Player, a Bullet, or a std::string).  
-TArgs are the "Ingredients": This represents the arguments passed into the constructor of TType.  
+`TType` is the type of the final object we are storing in the pool (e.g., a Player, a Bullet, or a std::string).  `TArgs` are the arguments passed into the constructor of `TType`.  
 
-### TArgs or Variadic Templates and Forwarding References
+### Variadic Templates and Forwarding References
 
-Variadic Templates is useful to create a function taking any number of arguments.
+Variadic Templates are useful to create a function taking any number of arguments.
 There are three distinct options all valid:
 
 - Pass by Value (Copies everything)
@@ -61,25 +64,19 @@ template <typename... Args>
 void doSomething(Args&&... args) { ... }
 ```
 
-When you attach && to a template parameter, it becomes a "Forwarding Reference" (often called a Universal Reference).
+When we attach `&&` to a template parameter, it becomes a "Forwarding Reference" (often called a Universal Reference).
 
-If the user passes a normal variable (l-value), the && collapses into a standard reference &. If the user passes a temporary variable (like "Hello" or 5), it stays as &&.
+If the user passes a normal variable (`l-value`), the `&&` collapses into a standard reference `&`. If the user passes a temporary variable (like "Hello" or 5), it stays as `&&`.
 
-The `acquire` function only job is to take arguments from the user and hand them *exactly as they are* to the `TType` constructor.
-
-When the compiler sees `TArgs&&` in a template, it uses a trick called "reference collapsing." It looks at what the user actually passed and adapts:
+The `acquire` function only job is to take arguments from the user and hand them *exactly as they are* to the `TType` constructor. When the compiler sees `TArgs&&` in a template, it does "reference collapsing." It looks at what the user actually passed and adapts:
 
 - If the user passes a normal, named variable (an lvalue), `TArgs&&` collapses into a normal reference (`&`).
 - If the user passes a temporary value (an rvalue, like a raw `5`), `TArgs&&` remains an rvalue reference (`&&`).
 
 To make this "Perfect Forwarding" actually work inside the function body, we must pair `&&` with a standard library tool called `std::forward`.
 
-When you get to writing the placement `new` inside your `acquire` method, it will look exactly like this:
-
 ```cpp
 #include <utility> // Required for std::forward
-
-// ...
 
 template <typename... TArgs> 
 Object acquire(TArgs&&... p_args) {
@@ -95,7 +92,7 @@ Object acquire(TArgs&&... p_args) {
 
 By using `TArgs&&` in the parameter list and `std::forward<TArgs>(p_args)...` in the function body, we guarantee that the arguments arrive at the constructor in the exact same state (copyable, movable, const, or non-const) as when the user passed them.
 
-## Using Operator Overloading `()`
+### Using the Operator Overloading `->`
 
 The line `TType *operator->() { return _ptr; }` is what makes the custom `Pool::Object` behave like a real, built-in pointer.  
 When `acquire()` returns a `Pool::Object`, the user receives a wrapper, not the raw `Particle*` (or whatever `TType` is).  
@@ -126,11 +123,9 @@ This technique is exactly how standard library smart pointers (like `std::unique
 
 ### Why use `explicit` for `operator bool()`
 
-In C++, compilers love to automatically convert types (called **implicit conversion**) to try and make your code compile.
+In C++, compilers love to automatically convert types (called **implicit conversion**) to try and make the code compile.
 
-If you just write `operator bool() const` without the `explicit` keyword, your object can be secretly treated as a `bool` (which is essentially a `0` or `1`) anywhere in your program.
-
-Here is the scenario of what happens without `explicit`:
+If you just write `operator bool() const` without the `explicit` keyword, your object can be secretly treated as a `bool` (which is essentially a `0` or `1`) anywhere in your program. Here is the scenario of what happens without `explicit`:
 
 ```cpp
 auto myObject = particlePool.acquire("Alpha", 1, 2, 3);
@@ -141,28 +136,24 @@ int mathResult = myObject + 100;
 
 // Or if a function expects an integer, you could accidentally pass the object!
 someFunctionExpectingInt(myObject); 
-
 ```
 
-The compiler won't warn you; it will just silently convert your custom `Pool::Object` into a `1` and continue running, creating a massive logical bug.
-
-
-By adding `explicit`:
+The compiler won't warn; it will just silently convert the custom `Pool::Object` into a `1` and continue running, creating a massive logical bug. By adding `explicit`:
 
 ```cpp
 explicit operator bool() const { return _ptr != nullptr; }
-
 ```
 
-We are telling the compiler: *"You are only allowed to convert this to a boolean in strict, explicit boolean contexts."*
+We are telling the compiler: *"You are only allowed to convert this to a boolean in strict, explicit boolean contexts."*  With `explicit`, the bad math code (`myObject + 100`) will immediately throw a compile-time error.
 
-With `explicit`, the bad math code (`myObject + 100`) will immediately throw a compile-time error.
+## DataBuffer, a binary serialization buffer
 
-## DataBuffer, a binary serialization buffer.
-
-The subject says "storing objects in byte format" and "Use C++ stream operators", it is asking you to build a class that acts like std::cout or std::cin, but instead of printing text to a screen, it converts variables into raw binary bytes and pushes them into a vector.
+The requirements ask for "storing objects in byte format" and "Use C++ stream operators", it is asking me to build a class that acts like std::cout or std::cin, but instead of printing text to a screen, it converts variables into raw binary bytes and pushes them into a vector.
 
 ### returning references for chaining
+
+This operator overload returns a reference. This is perfectly valid because we return a reference to the object which exists already. We return a reference to the object so that we can do something called 'Operator Chaining'.  
+
 ```cpp
 template <typename T> DataBuffer &operator<<(const T &data) {
 const uint8_t *bytePointer = reinterpret_cast<const uint8_t *>(&data);
@@ -170,38 +161,42 @@ _dataBuffer.insert(_dataBuffer.end(), bytePointer, bytePointer + sizeof(T));
 return *this;
 ```
 
-Why am I expecting a reference as return? Is this legal?
-
-### 1. What is `*this`?
-
-When you call `myBuffer << playerHealth;`, you are calling the `operator<<` function *on* an existing object (`myBuffer`).
-
-- `this` is a hidden pointer that C++ automatically passes into the function, pointing to `myBuffer` in memory.
-- `*this` dereferences that pointer, meaning it represents the actual, physical `myBuffer` object itself.
-
-Because `myBuffer` exists outside the function (usually in `main()` or another class), it does not get destroyed when the function ends. Therefore, returning a reference to it (`DataBuffer&`) is 100% safe and legal!
-
-Why do we return `DataBuffer&`?
-
-We return a reference to the object so that we can do something called 'Operator Chaining'.
-
-But because `operator<<` returns a reference to the very buffer it just modified, you can chain them together on a single line:
+When we call `myBuffer << playerHealth;`, we are calling the `operator<<` function *on* an existing object (`myBuffer`).  
+Because `myBuffer` exists outside the function (usually in `main()` or another class), it does not get destroyed when the function ends. Therefore, returning a reference to it (`DataBuffer&`) is valid. And because `operator<<` returns a reference to the very buffer it just modified, you can chain them together on a single line:
 
 ```cpp
-myBuffer << x << y << z;
+  TestObject obj1;
+  obj1.x = 42;
+  obj1.y = "Hello";
 
+  TestObject obj2;
+  obj2.x = 99;
+  obj2.y = "World";
+
+  myBuffer << obj1 << obj2;
 ```
 
-This is the exact same way standard C++ streams like `std::cout << "Hello " << "World!";` work.
+### Data flow for the `<<` and `>>` operators
+
+The easiest way to understand the `<<` and `>>` operators in C++ is to view them as **visual arrows showing the direction the data is flowing**.
+
+- `std::cout << "Hello";`
+*(The text "Hello" flows **into** the console output).*
+- `std::cin >> userInput;`
+*(Data from the console flows **into** your `userInput` variable).*
+- `myBuffer << obj1;`
+*(The data from `obj1` flows **into** your buffer).*
+- `myBuffer >> deserializedObj1;`
+*(The data flows out of the buffer and **into** the empty `deserializedObj1` variable).*
 
 ### Using the buffer
 
 - **Writing** doesn't need a custom playhead because `std::vector::insert` always just tacks the new bytes onto the very end of the vector. The vector's `.size()` naturally acts as the "write head."
 - **Reading** requires `_readPos` because we aren't destroying the tape as we read it; we need to remember where we left off.
 
-Because your buffer is a `std::vector<uint8_t>`, it has no idea what an `int` or a `float` or a `char` is. It only sees raw, meaningless bytes. This means it can mix and match completely different data types in the exact same buffer.
+Because our buffer is a `std::vector<uint8_t>`. It does not store any type information. We need to remember the order and types of we push in.
 
-You can do this:
+We can do this:
 
 ```cpp
 DataBuffer myBuffer;
@@ -210,14 +205,12 @@ int playerHealth = 100;
 float playerX = 45.5f;
 bool isPoisoned = true;
 
-// Write all three DIFFERENT types into the same buffer!
+// Write all three DIFFERENT types into the same buffer
 myBuffer << playerHealth << playerX << isPoisoned;
-
 ```
 
 Under the hood, `myBuffer` just sees: 4 bytes (int) + 4 bytes (float) + 1 byte (bool) = 9 total bytes of raw data.
-
-However, because the buffer forgets the *types* of the variables it stores, you must read the data back in the **exact same order** and with the **exact same types** that you wrote it. It is a strict First-In, First-Out (FIFO) system.
+However, because the buffer forgets the *types* of the variables it stores, we must read the data back in the **exact same order** and with the **exact same types** that we wrote it. It is a strict First-In, First-Out (FIFO) system.
 
 If we read the mixed buffer from the example above, we must do it like this:
 
@@ -231,32 +224,26 @@ myBuffer >> healthOut >> xOut >> poisonOut;
 
 ```
 
+### best practices in C++: Const Correctness
 
-------
-ok right. why those two are const?
+```cpp
 size_t DataBuffer::size() const { return _buffer.size(); }
 
 const std::vector<uint8_t> &DataBuffer : getBuffer() const {
     return _buffer;
 }
+```
 
-You just stumbled onto one of the most important best practices in C++: **Const Correctness**.
-
-There are actually two completely different types of `const` happening in those lines. Let's break them down, because understanding this will make your C++ code infinitely safer and more professional.
-
-### 1. The `const` at the end (The "Read-Only" Promise)
-
-Look at the end of both function signatures:
-
-* `size_t size() const`
-* `... getBuffer() const`
+There are actually two completely different types of `const` happening in those lines.  
 
 Putting `const` at the very end of a class method is a promise to the compiler: **"I swear this function will not change any of the class's variables."**
 
+- `size_t size() const`
+- `... getBuffer() const`
+
 Because `size()` only reads the size, and `getBuffer()` only reads the vector, they do not modify `_buffer` or `_readPos`.
 
-**Why do we care?**
-If you pass your buffer into another function, you usually pass it as a constant reference to prevent accidental changes.
+If we pass the buffer into another function, we usually pass it as a constant reference to prevent accidental changes.
 
 ```cpp
 void sendOverNetwork(const DataBuffer& bufferToSend) {
@@ -266,65 +253,70 @@ void sendOverNetwork(const DataBuffer& bufferToSend) {
     size_t s = bufferToSend.size(); // Allowed!
     bufferToSend.clear();           // Compiler error! clear() isn't const.
 }
-
 ```
 
-If you forgot to put `const` at the end of `size()`, the compiler would refuse to let you check the size inside `sendOverNetwork`, even though reading the size is harmless!
+If we forgot to put `const` at the end of `size()`, the compiler would refuse to let us check the size inside `sendOverNetwork`.
 
----
-
-### 2. The `const` at the beginning (The "Look But Don't Touch" Shield)
-
-Now look at the return type of the second function:
-
-* `const std::vector<uint8_t> &`
-
-This `const` applies to what you are **handing back to the user**.
-
-You are returning a reference (`&`) to your internal `_buffer`. Returning by reference is extremely fast because it doesn't copy the massive array of bytes. However, giving someone a reference to your internal variable is dangerous.
-
-**Without `const`:**
-If you just returned `std::vector<uint8_t>&`, the user could do this:
+What about he `const` at the return type?
 
 ```cpp
-// The user grabs your internal vector and destroys it!
-myBuffer.getBuffer().clear(); 
-
+const std::vector<uint8_t> & [...]
 ```
 
-Your `DataBuffer` wouldn't know the vector was cleared, and its `_readPos` would now be pointing to memory that doesn't exist. Instant crash.
+This `const` applies to what we are **handing back to the user**.
+You are returning a reference (`&`) to our internal `_buffer`. Returning by reference is extremely fast because it doesn't copy the massive array of bytes. However, giving someone a reference to our internal variable is dangerous.
 
-**With `const`:**
-By returning a `const ... &`, you are putting the vector behind museum glass. You are telling the user: *"You can look at the bytes, you can copy them, you can send them over a network, but the compiler will throw a massive error if you try to modify them."*
+```cpp
+// Without `const`:
+// The user grabs my internal vector and destroys it
+myBuffer.getBuffer().clear(); 
+```
 
-## the trap - strings and others...
-I had to do an overload for strings because they are not trivially copyiable. I added a static assert for the other types
-Yes, exactly! It will completely stop the compilation dead in its tracks.
+## Serializing strings and others types
 
-That is the true beauty of **`static_assert`**. The word "static" in this context means **compile-time**.
+I had to do an overload for strings because they are not 'trivially copyiable' because they contain pointer references to memory. At its core, a standard string is essentially a class holding three variables:
 
-When you hit build, the compiler evaluates the condition before it even tries to generate the binary executable. If the condition is `false`, the compiler throws a hard error, prints your custom message, and refuses to finish building the program.
+```cpp
+class string {
+private:
+    char*  _data;     // 1. A pointer to a character array on the heap
+    size_t _size;     // 2. How many characters are currently used
+    size_t _capacity; // 3. How much total memory is currently allocated
+};
+```
 
-Here is why this is so much better than a normal `assert()` or an `if` statement:
+Serializing a pointer address is quite pointless because it might just become a dangling pointer when deserialized.
+And on top of that modern C++ compilers use a trick called SSO (Small String Optimization). Heap allocations are slow. So, if the string is really short (usually under 15 characters), C++ instead of storing a pointer to the heap, stores the actual chars directly inside the class footprint.  
 
-* **Standard `assert()**` is a *runtime* check. Your code compiles successfully, you run the program, and then when it hits the bad code, the whole application crashes in front of the user.
-* **`static_assert`** is a *compile-time* check. You literally cannot build or distribute a broken version of the program. It catches the bug on the developer's machine before it ever runs.
+For this project I added an overload for strings and I added a static assert for the other types which are not supported:
 
-By putting that single line in your template, you have built a permanent, unbreakable structural wall in your code that physically prevents anyone (including future you) from ever accidentally corrupting memory with this buffer!
+```cpp
+static_assert(std::is_trivially_copyable<T>::value,
+                  "DataBuffer ERROR: Type is not trivially copyable! You must "
+                  "write a custom overload.");
+```
 
-## The "Include What You Use" Rule (IWYU)
+The compiler evaluates the condition before it generates the binary executable. If the condition is `false`, the compiler throws an error.
 
-Modern C++ linters follow a strict philosophy called Include What You Use. This rule states that if you use a class (like DataBuffer) in your main.cpp, you should include the exact, specific file where DataBuffer is defined.
+- **Standard `assert()**` is a *runtime* check.
+- **`static_assert`** is a *compile-time* check.
 
-Your libftpp.hpp file is what C++ developers call an Umbrella Header. It acts like a giant folder that just includes all your other tiny headers (data_structures.hpp, data_buffer.hpp, etc.) so the user only has to include one thing.
+### The "Include What You Use" Rule (IWYU)
 
-When you use DataBuffer in main.cpp, clangd looks at your code and says:
-"Wait a minute... DataBuffer actually lives in data_buffer.hpp. You included libftpp.hpp, but you aren't using anything defined directly inside it! You should include data_buffer.hpp instead."
+Modern C++ linters follow a philosophy called Include What You Use. This rule states that if you use a class (like DataBuffer) in your main.cpp, you should include the exact, specific file where DataBuffer is defined.
+My libftpp.hpp file is an Umbrella Header. It just includes all the other tiny headers (data_structures.hpp, data_buffer.hpp, etc.) so the user only has to include one thing.
+
+```cpp
+#include "data_structures/data_buffer.hpp"     // IWYU pragma: export
+```
+
+The `// IWYU pragma: export` is not only a comment but an instruction to the linter too.
 
 ## Memento
 
 It is a design pattern of the gang of four. Allows to take snapshots of an object. 
-The class Memento offers as public method the same and load function which will use a DataBuffer as a Snapshot- we already implemented a databuffer! so we gonna use it 
+The class Memento offers as public method the same and load function which will use a DataBuffer as a Snapshot- we already implemented a databuffer! so we gonna use it.
+
 ```cpp
 using Snapshot = DataBuffer;
 ```
@@ -2580,6 +2572,7 @@ IVector2<int> vec4{}; // Best practice!
 
 ## Links and Resources
 
+[https://en.wikipedia.org/wiki/Object_pool_pattern](https://en.wikipedia.org/wiki/Object_pool_pattern)
 [https://en.wikipedia.org/wiki/Design_Patterns](https://en.wikipedia.org/wiki/Design_Patterns)
 [https://en.wikipedia.org/wiki/Memento_pattern](https://en.wikipedia.org/wiki/Memento_pattern)
 [https://en.wikipedia.org/wiki/Command_pattern](https://en.wikipedia.org/wiki/Command_pattern)

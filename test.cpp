@@ -19,10 +19,14 @@ void workerTask(int threadID, std::string taskName) {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 }
+
+// Particle is a convenience class defclared in the test.hpp file
+// it just has a 3D coordinate.
 void pool_test() {
   std::cout << "\n\n================================\n";
   std::cout << "============ POOL ==============\n";
-  std::cout << "=== 1. Initializing Pool ===\n";
+  std::cout << "=== Initializing Pool ===\n";
+
   Pool<Particle> particlePool(3);
   std::cout << "Pool created with capacity for 3 particles.\n\n";
 
@@ -55,8 +59,6 @@ void pool_test() {
   if (p5) {
     p5->printPosition();
   }
-
-  //   std::cout << "\n\033[1;32m[✔] Test passed!\033[0m\n";
 }
 
 void databuffer_test() {

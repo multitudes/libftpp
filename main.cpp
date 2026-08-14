@@ -9,10 +9,10 @@
 int main() {
   pool_test();
   std::cout << "\n\033[1;32m[✔] pool_test executed!\033[0m\n";
-  // databuffer_test();
-  // std::cout << "\n\033[1;32m[✔] databuffer_test executed!\033[0m\n";
-  // memento_test();
-  // std::cout << "\n\033[1;32m[✔] memento_test executed!\033[0m\n";
+  databuffer_test();
+  std::cout << "\n\033[1;32m[✔] databuffer_test executed!\033[0m\n";
+  memento_test();
+  std::cout << "\n\033[1;32m[✔] memento_test executed!\033[0m\n";
   // observer_test();
   // std::cout << "\n\033[1;32m[✔] observer_test executed!\033[0m\n";
   // singleton_test();

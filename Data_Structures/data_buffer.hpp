@@ -42,30 +42,10 @@ public:
   // --- STRING OVERLOADS (For dynamic memory) ---
 
   // Serialization (Writing TO the buffer)
-  DataBuffer &operator<<(const std::string &data) {
-    size_t len = data.length();
-    *this << len; // Use our own template to write the size_t length
-
-    // Insert the actual characters
-    _buffer.insert(_buffer.end(), data.begin(), data.end());
-    return *this;
-  }
+  DataBuffer &operator<<(const std::string &data);
 
   // Deserialization (Reading FROM the buffer)
-  DataBuffer &operator>>(std::string &data) {
-    size_t len;
-    *this >> len; // Use our own template to read the size_t length
-
-    if (_readPos + len > _buffer.size()) {
-      throw std::runtime_error("not enough bytes to read!");
-    }
-
-    // Assign the characters directly into the string
-    data.assign(reinterpret_cast<const char *>(_buffer.data() + _readPos), len);
-    _readPos += len;
-
-    return *this;
-  }
+  DataBuffer &operator>>(std::string &data);
 
   // not in the subject but nice to have
   void clear();
