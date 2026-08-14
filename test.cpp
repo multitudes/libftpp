@@ -162,6 +162,10 @@ void databuffer_test() {
 }
 
 void memento_test() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============ Memento ===========\n";
+  std::cout << "================================\n";
+
   TestClass myObject;
   myObject.x = 42;
   myObject.y = "Hello";
@@ -178,9 +182,6 @@ void memento_test() {
   std::cout << "Restored state: x = " << myObject.x << ", y = " << myObject.y
             << std::endl;
 
-  std::cout << "\n\n================================\n";
-  std::cout << "============ Memento ===========\n";
-  std::cout << "=== 1. Starting New Game ===\n";
   Player myPlayer(100, 10.0f, 20.0f);
   myPlayer.printStatus();
 

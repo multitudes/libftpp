@@ -1,7 +1,8 @@
 #pragma once
 
-#include "../data_structures/data_buffer.hpp"
+#include "../libftpp.hpp"
 
+// This abstract class is designed to be inherited by a friend class
 class Memento {
 public:
   using Snapshot = DataBuffer;

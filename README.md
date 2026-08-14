@@ -272,7 +272,7 @@ You are returning a reference (`&`) to our internal `_buffer`. Returning by refe
 myBuffer.getBuffer().clear(); 
 ```
 
-## Serializing strings and others types
+## Serializing strings and other types
 
 I had to do an overload for strings because they are not 'trivially copyiable' because they contain pointer references to memory. At its core, a standard string is essentially a class holding three variables:
 
@@ -314,14 +314,16 @@ The `// IWYU pragma: export` is not only a comment but an instruction to the lin
 
 ## Memento
 
-It is a design pattern of the gang of four. Allows to take snapshots of an object. 
-The class Memento offers as public method the same and load function which will use a DataBuffer as a Snapshot- we already implemented a databuffer! so we gonna use it.
+It is a design pattern of the gang of four. Allows to take snapshots of an object. The class Memento offers as public method the same and load function which will use a DataBuffer as a Snapshot. We already implemented a databuffer so we gonna use it.
 
 ```cpp
 using Snapshot = DataBuffer;
 ```
 
-The full class also will be virtual. Nered a virtual destructor and also the methods (private) to be implemented in the children class also made virtual.
+### The Non-Virtual Interface (NVI) Idiom
+
+In C++ (unlike Java or C#), there is no official interface keyword. By convention, a class is only considered a "pure interface" if every single function (except the destructor) is pure virtual (= 0) and it contains absolutely no implemented code or member variables. Because the Memento class has concrete, implemented methods (save() and load()), it crosses the line from a pure interface into an abstract class.  
+This is a C++ design pattern called the Non-Virtual Interface (NVI) (which is a C++ specific version of the Template Method Pattern). The base Memento class maintains control over the flow of the saving and loading process. When someone calls `save()`, the base class might do extra things like log the time, set up a fresh DataBuffer, or lock a mutex. Then—and only then—it calls the private _saveToSnapshot() to let the child class write its specific variables into the buffer.
 
 ```cpp
 #pragma once
@@ -347,11 +349,11 @@ private:
     virtual void _loadFromSnapshot(Snapshot& snapshot) = 0;
 };
 ```
-think about how the parent Memento class actually executes the saving. When you call save(), Memento needs to turn around and call _saveToSnapshot() on the child class.
 
-Since Memento doesn't know what child class is inheriting from it (it could be a Player, a Particle, or a Car), what C++ keyword do we need to attach to those private _saveToSnapshot and _loadFromSnapshot methods so that the parent can trigger the child's specific version of them?
+### Hint - the friend keyword
 
-the 42 subject explicitly dropped the hint ("I wonder if there is a friendly way to do it...")When you (or anyone else) write a class that inherits Memento, it must look like this:
+"I wonder if there is a friendly way to do it..."  
+When we (or anyone else) write a class that inherits Memento, it must look like this:
 
 ```cpp
 class Player : public Memento {
@@ -374,6 +376,13 @@ private:
 };
 ```
 
+### The wiki original implementation
+
+In the classic UML diagram, there are three actors.
+
+- The Originator (Wikipedia): This is the object whose state needs saving. In my Code: This is my TestClass or Player.
+- The Memento (Wikipedia): This is the locked box containing the saved data. In my Code: This is the Snapshot (DataBuffer).  
+- The Caretaker (Wikipedia): This is the manager that holds onto the saves. In my Code: This is the main() function or whatever game manager holds the `std::vector<Snapshot>` save slots.
 
 ## The Observer
 
@@ -2572,10 +2581,11 @@ IVector2<int> vec4{}; // Best practice!
 
 ## Links and Resources
 
-[https://en.wikipedia.org/wiki/Object_pool_pattern](https://en.wikipedia.org/wiki/Object_pool_pattern)
-[https://en.wikipedia.org/wiki/Design_Patterns](https://en.wikipedia.org/wiki/Design_Patterns)
-[https://en.wikipedia.org/wiki/Memento_pattern](https://en.wikipedia.org/wiki/Memento_pattern)
-[https://en.wikipedia.org/wiki/Command_pattern](https://en.wikipedia.org/wiki/Command_pattern)
-[https://en.wikipedia.org/wiki/Observer_pattern](https://en.wikipedia.org/wiki/Observer_pattern)
-[https://en.wikipedia.org/wiki/State_pattern](https://en.wikipedia.org/wiki/State_pattern)
-[https://en.wikipedia.org/wiki/Singleton_pattern](https://en.wikipedia.org/wiki/Singleton_pattern)
+[https://en.wikipedia.org/wiki/Design_Patterns](https://en.wikipedia.org/wiki/Design_Patterns)  
+[https://en.wikipedia.org/wiki/Object_pool_pattern](https://en.wikipedia.org/wiki/Object_pool_pattern)  
+[https://en.wikipedia.org/wiki/Data_buffer](https://en.wikipedia.org/wiki/Data_buffer)  
+[https://en.wikipedia.org/wiki/Memento_pattern](https://en.wikipedia.org/wiki/Memento_pattern)  
+[https://en.wikipedia.org/wiki/Command_pattern](https://en.wikipedia.org/wiki/Command_pattern)  
+[https://en.wikipedia.org/wiki/Observer_pattern](https://en.wikipedia.org/wiki/Observer_pattern)  
+[https://en.wikipedia.org/wiki/State_pattern](https://en.wikipedia.org/wiki/State_pattern)  
+[https://en.wikipedia.org/wiki/Singleton_pattern](https://en.wikipedia.org/wiki/Singleton_pattern)  
