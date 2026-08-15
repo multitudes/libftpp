@@ -312,9 +312,13 @@ My libftpp.hpp file is an Umbrella Header. It just includes all the other tiny h
 
 The `// IWYU pragma: export` is not only a comment but an instruction to the linter too.
 
+# Design patterns
+
+> Design Patterns: Elements of Reusable Object-Oriented Software (1994) is a software engineering book describing software design patterns. The book was written by Erich Gamma, Richard Helm, Ralph Johnson, and John Vlissides, with a foreword by Grady Booch. The book is divided into two parts, with the first two chapters exploring the capabilities and pitfalls of object-oriented programming, and the remaining chapters describing 23 classic software design patterns. The book includes examples in C++ and Smalltalk. - wiki
+
 ## Memento
 
-It is a design pattern of the gang of four. Allows to take snapshots of an object. The class Memento offers as public method the same and load function which will use a DataBuffer as a Snapshot. We already implemented a databuffer so we gonna use it.
+Allows to take snapshots of an object. The class Memento offers as public method the same and load function which will use a DataBuffer as a Snapshot. We already implemented a databuffer so we gonna use it.
 
 ```cpp
 using Snapshot = DataBuffer;
@@ -529,38 +533,25 @@ See also the Publish–subscribe pattern which is more loosely coupled: [https:/
 
 ## Singleton
 
-This is it, the final boss! The Singleton pattern is incredibly famous (and sometimes infamous) in game development and software engineering.
-
-Let's break down the requirements from **image_b3daad.png** piece by piece.
-
-### The Core Concept: The "Highlander" Rule
-
-The description says: *"Ensures that a templated TType class has only one instance..."*
-
-Think of a Singleton like the Highlander: **There can be only one.**
-In a game, you might have hundreds of `Player` objects or `Particle` objects, but you only ever have **one** `AudioEngine` or **one** `GameManager`. If you accidentally created a second `AudioEngine`, your game would try to play music twice at the same time, causing a horrible echoing mess! The Singleton pattern physically prevents anyone from creating a second instance.
+The Singleton pattern is famous (and sometimes infamous) in game development and software engineering.
+The requirement says: *"Ensures that a templated TType class has only one instance..."*
+As an example in a game, we might have hundreds of `Player` objects or `Particle` objects, but we only ever have **one** `AudioEngine` or **one** `GameManager`.
 
 ### Decoding the Methods
 
-This subject is asking you to write a generic template (`singleton.hpp`) that can turn *any* class into a Singleton.
+We are gonna write a generic template (`singleton.hpp`) that can turn *any* class into a Singleton.
 
-**1. `TType* instance()**`
-Since we are only allowed to have one instance of our class, we need a global way to get our hands on it. This function acts as the global access point. Whenever you need the audio engine, you just call `Singleton<AudioEngine>::instance()`, and it hands you the pointer to the one true engine.
+Since we are only allowed to have one instance of our class, we need a global way to get our hands on it.  Whenever we need the audio engine, we just call `Singleton<AudioEngine>::instance()`, and it hands the pointer to the engine.
 
-**2. `template<typename ... TArgs> void instantiate(TArgs&& p_args)**`
-This looks scary, but it's just modern C++ magic.
+With `template<typename ... TArgs> void instantiate(TArgs&& p_args)**` we pass the arguments into the `TType` constructor.
+If `instantiate` is called a second time, it **must throw an exception**.  
 
-* The `... TArgs` is called a **Variadic Template**. It just means "accept absolutely any number of arguments, of any type."
-* Why do we need this? Because `Singleton` doesn't know what `TType` is. If `TType` is a `Database`, its constructor might need a `(std::string username, std::string password)`. If it's a `GameManager`, it might need an `(int startingLevel)`. This variadic template catches whatever arguments the user provides and passes them perfectly into the `TType` constructor.
-* **The Trapdoor:** The subject specifies that if `instantiate` is called a second time, it **must throw an exception**. This is how we enforce the "only one" rule!
+### The Friend Keyword
 
-### The Hint: The Friend Keyword (Again!)
-
-The hint says: *"This class must be declared as a friend in the inherited class"*
-
-To physically stop a programmer from typing `AudioEngine engine2;` and ruining our game, we have to make the constructor of `AudioEngine` **private**. If the constructor is private, no one can build it!
-But wait... if it's private, how does our `Singleton::instantiate()` method build it? Just like we did in the Memento pattern, the child class must explicitly invite the `Singleton` inside using `friend class Singleton<TType>;`.
-
+The hint says: *"This class must be declared as a friend in the inherited class"*.  
+The child class must explicitly invite the `Singleton` inside using `friend class Singleton<TType>;`.  
+The entire point of the Singleton pattern is to absolutely guarantee that only one instance of a class ever exists.
+If our GameManager class had a public constructor, any random developer could just type GameManager secondManager; anywhere in the code. By making the constructor private in the GameManager class we enforce this promise and instantiate using `GameManager *myGame = Singleton<GameManager>::instance();`.
 
 ## The Finite State Machine
 
@@ -2409,6 +2400,7 @@ IVector2<int> vec4{}; // Best practice!
 
 ## Links and Resources
 
+[https://en.wikipedia.org/wiki/Design_Patterns](https://en.wikipedia.org/wiki/Design_Patterns)  
 [https://en.wikipedia.org/wiki/Design_Patterns](https://en.wikipedia.org/wiki/Design_Patterns)  
 [https://en.wikipedia.org/wiki/Object_pool_pattern](https://en.wikipedia.org/wiki/Object_pool_pattern)  
 [https://en.wikipedia.org/wiki/Data_buffer](https://en.wikipedia.org/wiki/Data_buffer)  

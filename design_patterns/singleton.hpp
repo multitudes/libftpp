@@ -3,6 +3,8 @@
 #include <stdexcept> // Replaced <exception> to use std::runtime_error
 #include <utility>   // Required for std::forward
 
+// when we pass a class as TType, this class needs to use the friend keyword
+// and have a private constructor
 template <typename TType> class Singleton {
 private:
   static TType *_instance;

@@ -269,7 +269,7 @@ void observer_test() {
 void singleton_test() {
   std::cout << "\n\n================================\n";
   std::cout << "============ SINGLETON ===========\n";
-  std::cout << "=== 1. Initializing the Singleton ===\n";
+  std::cout << "=== Initializing the Singleton ===\n";
 
   Singleton<GameManager>::instantiate(1, "Hardcore");
 
