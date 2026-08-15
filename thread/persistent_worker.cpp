@@ -9,6 +9,7 @@
 
 PersistentWorker::PersistentWorker() {
   _isRunning = true;
+
   // this is what the workers need to do
   auto workerTasks = [this]() {
     while (this->_isRunning) {
@@ -46,6 +47,7 @@ void PersistentWorker::addTask(const std::string &name,
   std::lock_guard<std::mutex> lock(this->_mutex);
   _tasks[name] = jobToExecute;
 }
+
 void PersistentWorker::removeTask(const std::string &name) {
   std::lock_guard<std::mutex> lock(this->_mutex);
   size_t removedCount = this->_tasks.erase(name);

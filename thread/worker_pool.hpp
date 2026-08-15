@@ -3,8 +3,8 @@
 #include "../thread/thread_safe_queue.hpp"
 #include "thread.hpp"
 #include <atomic>
+#include <functional>
 #include <memory>
-#include <vector>
 
 class WorkerPool {
 private:

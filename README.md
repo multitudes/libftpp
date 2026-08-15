@@ -611,7 +611,7 @@ In C++, **iostream** stands for **Input/Output Stream**.
 
 ## Thread safe iostream
 
-We built a **Wrapper**. We created a class that *looks* and *acts* exactly like `std::cout`. It intercepts the data, organizes it, adds a prefix, and then safely hands it over to `std::cout`.
+We built a Wrapper creating a class that *looks* and *acts* exactly like `std::cout`. It intercepts the data, organizes it, adds a prefix, and then safely hands it over to `std::cout`.
 
 - The Buffer (`std::ostringstream _buffer`)**
 Because we have multiple threads competing to print, every thread gets an `ostringstream` (Output String Stream).
@@ -637,64 +637,45 @@ C++ provides several specialized mutexes for different scenarios, and `lock_guar
 - **`std::timed_mutex`:** A mutex that allows you to specify a timeout. If it can't get the lock within 5 seconds, it gives up instead of waiting forever.
 - **`std::shared_mutex` (C++17):** Used for "Read/Write" locks, where you might want multiple threads to be able to read data simultaneously, but only one thread to write.
 
-## Threads
+# Threads
+
+## ThreadSafeQueue
+
+We implement a wrapper for a queue or dequeue to add and pop elements from the front and the back. To make it thread safe we add mutexes like `std::lock_guard<std::mutex> lock(_mutex);` when accessing the properties.
+
+## Thread
 
 we are building a wrapper around C++'s standard std::thread. At first glance, it might seem silly to build a wrapper for something that already exists, but this subject introduces a few brilliant architectural twists.
 
-Here are the three main conceptual challenges we need to solve based on the subject image.
+Here are the three main conceptual challenges we need to solve.
 
 1. The Delayed Launch (The Constructor vs. start())
 Normally in C++, the moment you create a std::thread, it instantly starts running. It does not wait for permission.
-However, your subject explicitly states that the constructor only "sets up the thread data, waiting for a start() call to launch the function."
-
-This means our Thread class needs to act like a loaded spring. The constructor will securely store the name and the functToExecute inside the class as private variables, but it won't actually spawn the real std::thread until the user explicitly calls start().
+However, the subject explicitly states that the constructor only "sets up the thread data, waiting for a start() call to launch the function."
 
 2. The Integration Hook (Connecting to ThreadSafeIOStream)
-The hint in image_70a9bf.png is the most important part of this exercise: "The thread name should be used by ThreadSafeIOStream and must provide it with a prefix..."
+The thread name should be used by ThreadSafeIOStream and must provide it with a prefix... This is where things get slightly tricky. We made threadSafeCout using the thread_local keyword, that means the prefix must be set from inside the new thread while it is running. We can't set it from the main thread before the worker starts.
 
-This is where things get slightly tricky. Remember how we made threadSafeCout using the thread_local keyword? That means the prefix must be set from inside the new thread while it is running. We can't set it from the main thread before the worker starts.
+When start() is called we need to call `threadSafeCout.setPrefix(name)`, then execute the user's `functToExecute`. The stop() method requires us to "join it properly."
+In multithreading, join() means "pause the main program and wait patiently for this specific thread to finish whatever it is doing." If we destroy a std::thread while it is still running without joining it, the C++ program will throw a `std::terminate` error. Our stop() method will act as a safety net to ensure we wait for the thread to complete before cleaning it up.
 
-When start() is called, we can't just blindly hand the user's functToExecute directly to the OS. We have to create a "middleman" function that does two things:
-Calls threadSafeCout.setPrefix(name).
-Then executes the user's functToExecute.
-3. Graceful Shutdown (stop())
-The stop() method requires us to "join it properly."
-In multithreading, join() means "pause the main program and wait patiently for this specific thread to finish whatever it is doing." If you destroy a std::thread while it is still running without joining it, the C++ program will violently crash (specifically, it throws a std::terminate error). Our stop() method will act as a safety net to ensure we wait for the thread to complete before cleaning it up.
+### Sharing memory between threads
 
-Since we need to intercept the launch to set up the ThreadSafeIOStream prefix before the user's actual function runs, do you have any ideas on how we might bundle that setup step and the user's function together when we finally trigger the real std::thread?
-You have hit on some of the absolute deepest and most important questions in multithreaded programming! Let's untangle this piece by piece, because your instincts are actually spot on.
+- All threads share the **Heap**.
+- But every single thread gets its own personal, private **Stack**.
 
-### 1. Are stacks shared between threads?
+Because `threadSafeCout` is marked as `thread_local`, the compiler secretly places it in the thread's private memory.
+To set the prefix, we must be inside the running thread. If we call `threadSafeCout.setPrefix()` from the constructor, we are just changing the main thread's prefix. We have to start the new thread first, and the very first thing it must do is set its own prefix before running the user's code.  
+The C++ `std::thread` constructor uses a **Variadic Template**. When we write `std::thread(workerTask, 1, "Audio")`, we are handing the thread a function pointer and a list of ingredients. The OS creates the new thread, and once it is fully booted up, it unpacks those ingredients and calls the function.  
+Since the user passes us a function (`functToExecute`), but we *also* need to set the prefix first, we can't just hand the user's function directly to `std::thread`. Instead, we create a **Lambda function** inside our `start()` method. This lambda acts as our middleman. We hand the lambda to the `std::thread`.
 
-**No!** And this is a crucial rule of multithreading:
-
-* All threads share the **Heap** (where `new` and global variables live).
-* But every single thread gets its own personal, private **Stack** (where local variables and function call histories live).
-
-Because `threadSafeCout` is marked as `thread_local`, the compiler secretly places it in the thread's private memory. This is exactly why your deduction in your third question is 100% correct!
-
-To set the prefix, we *must* be inside the running thread. If we call `threadSafeCout.setPrefix()` from the constructor, we are just changing the main thread's prefix! We have to start the new thread *first*, and the very first thing it must do is set its own prefix before running the user's code.
-
-### 2. How does `std::thread(workerTask, 1, "Audio")` work?
-
-In the previous exercise, it looked weird because we passed a function name and its arguments separated by commas, rather than calling it like `workerTask(1, "Audio")`.
-
-This works because the C++ `std::thread` constructor uses a **Variadic Template** (exactly like the one we used in your `Singleton` class!).
-When you write `std::thread(workerTask, 1, "Audio")`, you are handing the thread a function pointer and a list of ingredients. The OS creates the new thread, and once it is fully booted up, it unpacks those ingredients and calls the function for you.
-
-### 3. The Solution: The "Middleman" Lambda
-
-Since the user passes us a function (`functToExecute`), but we *also* need to set the prefix first, we can't just hand the user's function directly to `std::thread`.
-
-Instead, we create a **Lambda function** (an anonymous function) inside our `start()` method. This lambda acts as our middleman. We hand the lambda to the `std::thread`.
-
-When the OS boots up the thread, it runs our lambda, which does the exact sequence you figured out:
+When the OS boots up the thread, it runs our lambda, which does this exact sequence:
 
 1. Access the global `threadSafeCout` (which is now local to this new thread!).
 2. Set the prefix using the stored `name`.
 3. Call the stored `functToExecute()`.
 
-Here is a sneak peek of what that `start()` method looks like conceptually:
+Here is the `start()` method :
 
 ```cpp
 void Thread::start() {
@@ -710,217 +691,63 @@ void Thread::start() {
         
     });
 }
-
 ```
 
-By wrapping it in a lambda, we gain total control over the startup sequence of the thread!
+## Workers Pool
 
-Ah, that makes perfect sense! If those lines were in `start()`, you are incredibly close to the final answer.
+> Manages worker threads to execute jobs
 
-However, we are running into the "Thread Boundary" trap. This is the hardest part of multithreading to visualize, so let's break down exactly *who* is running those two lines of code in your `start()` function.
+### Spawning Threads is Expensive
 
-### The "Who is doing what?" Problem
+In a game engine, you have hundreds of asynchronous tasks happening every frame: calculating pathfinding, loading audio files, or generating terrain. If you write std::thread t(doWork); every time you need a background task, you are asking the Operating System to allocate memory, set up stack space, and create a system-level thread context. It is incredibly slow—like hiring a new employee for a single 5-minute job and immediately firing them when they finish.
 
-Imagine the **Main Thread** is a manager, and the **New Thread** is a worker.
+Instead of creating and destroying threads, we create a Worker Pool. we hire a fixed team of workers (usually matching our CPU core count) when the program starts. We put them in a "break room" where they sleep. When a task arrives, we wake one of them up, they do the job, and then they go right back to sleep.
 
-When you write this:
+Why `std::vector<std::unique_ptr<Thread>>`? Why didn't we just write `std::vector<Thread> _workers;`?
+Because we cannot copy a running OS thread, C++ specifically deletes the copy constructor for `std::thread`. Since our class contains a `std::thread`, our custom `Thread` object **cannot be copied**.
+If we use `std::vector<Thread>`, whenever the vector runs out of room, it tries to allocate a larger chunk of memory and *copy* the old elements into the new space. This is not allowed.
+
+Instead of putting the workers *inside* the vector, we just use pointers. That is why we must use a pointer: `std::vector<Thread*>`.
+
+If we just used raw pointers (`std::vector<Thread*>`), C++ expects us to manually clean up the memory. In our destructor, we would have to loop through every worker and manually type `delete worker;`. If we forgot, or if the program crashed before it reached the destructor, we would cause a **Memory Leak**. `std::unique_ptr` is a "Smart Pointer." It acts exactly like a regular pointer, but it has one feature: **it cleans up after itself**.
+When the `WorkerPool` is destroyed, the vector is destroyed. When the vector is destroyed, the `unique_ptr` will automatically delete the thread.
+
+- **`std::vector`**: Because we need a list to hold our multiple workers.
+- **`Pointer`**: Because vectors copy things, and we are legally not allowed to copy a thread.
+- **`std::unique_ptr`**: Because it automatically deletes the memory for us so we don't cause a memory leak when the factory closes down.
+
+While `unique_ptr` is all about **strict, exclusive ownership**, `shared_ptr` is all about **shared ownership**.  
+When we create a `std::shared_ptr`, we use reference counting. As a general rule in modern C++: **Always default to `std::unique_ptr**`. Only upgrade to `std::shared_ptr` if you absolutely need multiple different classes to share the exact same piece of data at the same time!
+
+The subject required an IJobs interface, which is a classic Object-Oriented approach. However, I wanted my underlying architecture to be modern C++14, so my queue uses std::function. To satisfy both the subject and modern design principles, I used a capturing lambda as a bridge. The lambda captures a smart pointer to the IJobs object and calls .execute() on the worker thread.
 
 ```cpp
-void start() {
-    // 1. The Manager says "Worker, start doing your job!"
-    _thread = std::thread(_functToExecute);
-    
-    // 2. The Manager then puts on a nametag with the worker's name.
-    threadSafeCout.setPrefix(_name);
-}
-
+auto mySubjectJob = std::make_shared<HeavyCalculationJob>();
+  pool.addJob([mySubjectJob]() { mySubjectJob->execute(); });
 ```
 
-Do you see the bug? Because `start()` is being called by the Main Thread, the Main Thread is the one executing `setPrefix()`. It accidentally changed its *own* prefix instead of the worker's prefix!
+## PersistentWorker
 
-Because `threadSafeCout` is `thread_local`, the worker thread has its own separate, blank copy of `threadSafeCout` that never gets set.
+> A thread that continuously performs a set of tasks defined by user.
 
-### The Solution: The Lambda Function
+Until now I used the `lock_guard` on the mutex which automatically unlock when I go out of scope. For the persistent worker I had to manually set and unlock the mutex therefore I used `std::unique_lock<std::mutex> lock(this->_mutex);` followed by `lock.unlock();`.
 
-To fix this, we have to bundle the nametag instruction *and* the job instruction together, and hand the whole package to the worker. We do this using a Lambda function.
+# Network
 
-Here is exactly how you write that:
+## Message
+> Handles messages between client and server.
 
-```cpp
-void start() {
-    // We pass a lambda to std::thread. 
-    // The [this] tells the lambda: "You are allowed to look at my private variables."
-    _thread = std::thread([this]() {
-        
-        // EVERYTHING INSIDE THESE BRACKETS IS EXECUTED BY THE NEW THREAD!
-        
-        // 1. The new thread sets its own personal prefix
-        threadSafeCout.setPrefix(this->_name);
-        
-        // 2. The new thread executes the user's stored function
-        this->_functToExecute();
-        
-    });
-}
+- **The Constructor `Message(int type)`:** When we create a message, we label it. For example, `1` might mean "Login Request," and `2` might mean "Player Movement."
+- **The Method `int type()`:** When the server receives it, it will call this method to read the type. 
 
-```
-
-By wrapping both instructions inside that lambda `[this]() { ... }`, we guarantee that the new worker thread puts on its nametag *before* it starts doing the actual work.
-
-Does that boundary between what the main thread executes and what the new thread executes make sense? And if so, how do you think we should write the `stop()` method to safely shut this `_thread` down?
-
-## for loops, i++ or ++i
-
-Yes, in this specific situation, they are exactly the same! The loop will run the exact same number of times, and the end result of your program will be completely identical.
-
-However, you will notice that almost all experienced C++ programmers habitually write `++i` instead of `i++`. This is because of a very specific quirk in how C++ handles memory under the hood.
-
-Here is the exact difference between the two and why one is considered a C++ "best practice."
-
-
-### 1. `i++` (Post-Increment)
-
-When you use post-increment, you are telling the computer: *"Give me the current value of `i`, and then add 1 to it in the background."*
-To achieve this, the computer must actually do three things:
-
-1. Make a temporary copy of `i` in memory.
-2. Add 1 to the real `i`.
-3. Return the temporary copy to you.
-
-### 2. `++i` (Pre-Increment)
-
-When you use pre-increment, you are telling the computer: *"Add 1 to `i` immediately, and give me the new result."*
-The computer only does two things:
-
-1. Add 1 to the real `i`.
-2. Return the real `i` directly.
-
-### Why does it matter in a `for` loop?
-
-For simple types like `int` or `size_t`, modern compilers are smart enough to realize you aren't actually using the returned copy inside the `for` loop statement, so they optimize the copy away. For an `int`, they run at the exact same speed.
-
-**BUT**, in C++ you frequently write loops using "Iterators" (which are heavy, complex objects used to navigate through vectors and maps). For example:
-
-```cpp
-for (std::vector<std::string>::iterator it = myVector.begin(); it != myVector.end(); it++)
-
-```
-
-If you use `it++` there, the computer is forced to make a complete copy of that heavy iterator object on every single loop, which can significantly slow down your program!
-
-Because of this, C++ developers train their muscle memory to **always use `++i**` in loops. It guarantees you are never making accidental, unnecessary copies, regardless of whether you are looping with a simple integer or a massive custom object.
-
-This is one of the most important architectural questions in modern C++. When you look at `std::vector<std::unique_ptr<Thread>>`, it looks like a massive, confusing mouthful of code.
-
-Why didn't we just write `std::vector<Thread> _workers;`?
-
-It comes down to three strict rules of C++ memory management and how the operating system handles threads.
-
-### 1. The "No Clones" Rule (Why we can't use `std::vector<Thread>`)
-
-Under the hood, our custom `Thread` class holds a `std::thread`. A `std::thread` is heavily tied to your computer's actual operating system.
-
-Imagine a real-life factory worker. You cannot magically press a "copy" button and clone a human worker. The same applies to operating system threads. Because you cannot copy a running OS thread, C++ specifically deletes the copy constructor for `std::thread`. Since our class contains a `std::thread`, our custom `Thread` object **cannot be copied**.
-
-If you use `std::vector<Thread>`, whenever the vector runs out of room, it tries to allocate a larger chunk of memory and *copy* the old elements into the new space. The compiler will see it trying to copy a thread, panic, and throw a massive error.
-
-### 2. The Pointer Loophole
-
-How do we get around the fact that vectors need to copy things, but threads can't be copied? **Pointers.**
-
-Instead of putting the workers *inside* the vector, we put the workers out in the main warehouse (the Heap memory). Then, we just hand the vector a piece of paper with the worker's address on it (a pointer).
-
-If the vector needs to resize, it just copies the pieces of paper. The actual worker thread is never copied, moved, or interrupted! That is why we must use a pointer: `std::vector<Thread*>`.
-
-### 3. The Cleanup Problem (Why `std::unique_ptr` instead of `*`)
-
-If we just used raw pointers (`std::vector<Thread*>`), C++ expects us to manually clean up the memory. In our destructor, we would have to loop through every worker and manually type `delete worker;`. If we forgot, or if the program crashed before it reached the destructor, we would cause a **Memory Leak**.
-
-`std::unique_ptr` is a "Smart Pointer." It acts exactly like a regular pointer, but it has one magical feature: **it cleans up after itself**.
-When the `WorkerPool` is destroyed, the vector is destroyed. When the vector is destroyed, the `unique_ptr` says, *"Ah, my container is dying! I will automatically delete the Thread I am pointing to."*
-
-### Summary
-
-* **`std::vector`**: Because we need a list to hold our multiple workers.
-* **`Pointer`**: Because vectors copy things, and we are legally not allowed to copy a thread.
-* **`std::unique_ptr`**: Because it automatically deletes the memory for us so we don't cause a memory leak when the factory closes down.
-
-Yes, you are exactly right! Both `std::unique_ptr` and `std::shared_ptr` were introduced in C++11, and together they completely revolutionized how C++ developers manage memory.
-
-While `unique_ptr` is all about **strict, exclusive ownership**, `shared_ptr` is all about **shared ownership**.
-
-Here is a breakdown of how it works and why you would use it.
-
-### The Magic of `std::shared_ptr`: Reference Counting
-
-When you create a `std::shared_ptr`, it creates a hidden counter in the background (called a Control Block).
-
-* Every time you make a copy of that `shared_ptr` and give it to a different part of your program, the counter goes **up** by 1.
-* Every time one of those parts of your program finishes and its pointer is destroyed, the counter goes **down** by 1.
-* When the counter hits **exactly 0**, the `shared_ptr` realizes, *"I am the very last person using this memory,"* and it finally deletes the underlying object.
-
-### An Analogy: The Living Room TV
-
-* **`std::unique_ptr` is like your toothbrush.** You own it exclusively. Nobody else is allowed to use it, and when you move out, you throw it in the trash.
-* **`std::shared_ptr` is like a TV in an apartment with roommates.** You all share ownership. If one roommate moves out, the TV stays because the others are still using it. The TV is only thrown away when the *very last* roommate moves out of the apartment.
-
-### Why didn't we use `shared_ptr` for our Worker Pool?
-
-You might be wondering why we didn't just use `std::shared_ptr<Thread>` for our workers just to be safe. It comes down to two reasons:
-
-1. **Performance Overhead:** Because `shared_ptr` has to constantly update that hidden counter every time it is moved or copied, it is slightly slower and uses a bit more memory than `unique_ptr`.
-2. **Architectural Design:** Our `WorkerPool` is the sole manager of the factory. No other part of our C++ program needs to own those worker threads. Because the `WorkerPool` is the exclusive owner, `unique_ptr` perfectly describes our design intent.
-
-As a general rule in modern C++: **Always default to `std::unique_ptr**`. Only upgrade to `std::shared_ptr` if you absolutely need multiple different classes to share the exact same piece of data at the same time!
-
-## Network
-
-### Message
-Welcome to the Networking chapter! This is a massive milestone. By combining the multithreading concepts you just mastered with these new networking concepts, you are essentially building the exact architecture used to run multiplayer video games and high-performance web servers.
-
-As requested, I won't write any code yet. Let's break down exactly what the subject in **image_732522.png** is asking for conceptually, because the `Message` class is one of the most fascinating patterns in C++.
-
-### 1. The Master Header File
-
-The first thing it mentions is `network.hpp`. This is just an "umbrella" file. Instead of a user having to include `message.hpp`, `connection.hpp`, and `server.hpp` individually, they just include `network.hpp`. It will literally just be a file containing `#include` statements for the other files you are about to build.
-
-### 2. The `Message` Concept (The Envelope)
-
-When computers talk to each other over a network, they don't send variables or objects; they send long streams of raw 1s and 0s.
-
-A `Message` object acts like a physical envelope that packages your C++ data into something the network can safely transmit and the receiving computer can easily understand.
-
-### 3. The `type` (The Label)
-
-* **The Constructor `Message(int type)`:** When you create a message, you immediately stick a label on the outside of the envelope. For example, `1` might mean "Login Request," and `2` might mean "Player Movement."
-* **The Method `int type()`:** When the server receives an envelope, the very first thing it does is call this method to read the label. This tells the server how it should unpack and process the rest of the envelope.
-
-### 4. The Templated Operators `<<` and `>>` (Stuffing the Envelope)
-
-This is where the real C++ magic happens.
-
-Normally, we use `<<` with `std::cout` to push text to the console. Here, we are overloading `<<` so you can push data *into* the message payload, and overloading `>>` so the receiver can pull data *out* of the message payload.
+We are overloading `<<` so you can push data *into* the message payload, and overloading `>>` so the receiver can pull data *out* of the message payload.
 
 For example, you could write:
 `myMessage << playerX << playerY << playerHealth;`
 
 Because the subject asks for **templated** operator overloads, we can write exactly one `<<` function and one `>>` function. The C++ compiler will automatically adapt that single function to accept integers, floats, doubles, or even custom structures! It will figure out exactly how many bytes the data type takes up and push those bytes into the payload.
 
----
 
-### The Architectural Puzzle
-
-Before we can write the templated operators to push data in and out, we need a place to actually store that data inside our `Message` class. Since we are pushing an unknown number of variables of unknown types, and networks only understand raw bytes, we need a flexible container.
-
-What standard C++ container (like a vector, array, or list) do you think we should use as our private "payload" variable to hold a sequence of raw bytes?
-
-> oh remember we did this databuffer? can we use it?
-
-This is an absolutely perfect connection! Yes, that `DataBuffer` is exactly the right tool for the job.
-
-What you wrote there is a classic **Serialization Engine**. By casting variables to `uint8_t*` (unsigned 8-bit integers, which are literally just raw bytes) and pushing them into a `std::vector`, you have already solved the hardest part of networking in C++.
-
-Since the assignment in the image specifically requires the `Message` class itself to have the templated `<<` and `>>` operators, you have two ways to integrate your `DataBuffer` logic:
 
 ### Option 1: The Composition Approach
 
@@ -2183,6 +2010,40 @@ Since C++11, the absolute best practice to avoid the "Most Vexing Parse" is to u
 ```cpp
 IVector2<int> vec4{}; // Best practice! 
 ```
+
+
+## for loops, i++ or ++i?
+
+Notice that almost all experienced C++ programmers habitually write `++i` instead of `i++`. This is because of a very specific quirk in how C++ handles memory under the hood. Here is the exact difference between the two and why one is considered a C++ "best practice."
+
+### 1. `i++` (Post-Increment)
+
+When we use post-increment, we are asking: *"Give me the current value of `i`, and then add 1 to it in the background."*
+To achieve this, the computer must actually do three things:
+
+1. Make a temporary copy of `i` in memory.
+2. Add 1 to the real `i`.
+3. Return the temporary copy.
+
+### 2. `++i` (Pre-Increment)
+
+When we use pre-increment, you are telling the computer: *"Add 1 to `i` immediately, and give me the new result."*
+The computer only does two things:
+
+1. Add 1 to the real `i`.
+2. Return the real `i` directly.
+
+For simple types like `int` or `size_t`, modern compilers are smart enough to realize you aren't actually using the returned copy inside the `for` loop statement, so they optimize the copy away. For an `int`, they run at the exact same speed.
+
+But, in C++ you frequently write loops using "Iterators". For example:
+
+```cpp
+for (std::vector<std::string>::iterator it = myVector.begin(); it != myVector.end(); it++)
+
+```
+
+If we use `it++` there, the computer is forced to make a complete copy of that heavy iterator object on every single loop.
+Because of this, C++ developers mostly use `++i` in loops. It guarantees you are never making accidental, unnecessary copies, regardless of whether you are looping with a simple integer or a massive custom object.
 
 ## Links and Resources
 

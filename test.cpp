@@ -578,6 +578,10 @@ void thread_test() {
 }
 
 void workers_pool_test() {
+  std::cout << "\n\n================================\n";
+  std::cout << "============ WorkerPool ===========\n";
+  std::cout << "=== Starting ===\n\n";
+
   WorkerPool pool(4);
   auto job = []() {
     threadSafeCout << "Executing job on thread: " << std::this_thread::get_id()
@@ -590,9 +594,6 @@ void workers_pool_test() {
 
   std::this_thread::sleep_for(std::chrono::seconds(2));
   {
-    std::cout << "\n\n================================\n";
-    std::cout << "============ WorkerPool ===========\n";
-    std::cout << "=== 1. Starting ===\n\n";
     WorkerPool pool(4);
 
     auto job = []() {
@@ -605,6 +606,30 @@ void workers_pool_test() {
       pool.addJob(job);
     }
     std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
+
+  class HeavyCalculationJob : public WorkerPool::IJobs {
+  public:
+    void execute() override {
+      // Simulate some heavy OOP work
+      threadSafeCout
+          << ">>> Executing HeavyCalculationJob (IJobs interface) on thread: "
+          << std::this_thread::get_id() << std::endl;
+    }
+  };
+  std::cout << "\n=== Testing IJobs Interface (Subject Requirement) ===\n";
+
+  // 1. Instantiate your concrete job
+  // We use shared_ptr so the lambda can capture it safely without memory leaks!
+  auto mySubjectJob = std::make_shared<HeavyCalculationJob>();
+
+  // 2. Wrap the OOP job inside your functional queue
+  pool.addJob([mySubjectJob]() { mySubjectJob->execute(); });
+
+  // (Optional) Throw a few more in there just to prove it works perfectly
+  for (int i = 0; i < 5; ++i) {
+    auto loopJob = std::make_shared<HeavyCalculationJob>();
+    pool.addJob([loopJob]() { loopJob->execute(); });
   }
 }
 
@@ -670,7 +695,18 @@ void message_test() {
 
   std::cout << "--- TESTING BUFFER BOUNDARY ---\n";
   int data = 0;
-  msg >> data;
+
+  try {
+    msg >> data; // This will trigger the exception
+
+    // If it reaches this line, something is wrong!
+    std::cout << "\033[1;31m[FAIL] It read data that didn't exist!\033[0m\n";
+  } catch (const std::runtime_error &e) {
+    // We expect it to land here!
+    std::cout
+        << "\033[1;32m[SUCCESS] Caught expected boundary exception: \033[0m"
+        << e.what() << "\n";
+  }
 }
 
 void server_test() {

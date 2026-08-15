@@ -44,3 +44,8 @@ DataBuffer &DataBuffer::operator>>(std::string &data) {
 
   return *this;
 }
+
+void DataBuffer::setBuffer(const std::vector<uint8_t> &newBuffer) {
+  _buffer = newBuffer;
+  _readPos = 0;
+}

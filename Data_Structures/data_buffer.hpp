@@ -51,4 +51,5 @@ public:
   void clear();
   size_t size() const;
   const std::vector<uint8_t> &getBuffer() const;
+  void setBuffer(const std::vector<uint8_t> &newBuffer);
 };
