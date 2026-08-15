@@ -17,8 +17,8 @@ int main() {
   std::cout << "\n\033[1;32m[✔] observer_test executed!\033[0m\n";
   singleton_test();
   std::cout << "\n\033[1;32m[✔] singleton_test executed!\033[0m\n";
-  // state_machine_test();
-  // std::cout << "\n\033[1;32m[✔] state_machine_test executed!\033[0m\n";
+  state_machine_test();
+  std::cout << "\n\033[1;32m[✔] state_machine_test executed!\033[0m\n";
   // thread_safe_iostream_test();
   // std::cout << "\n\033[1;32m[✔] thread_safe_iostream_test
   // executed!\033[0m\n";

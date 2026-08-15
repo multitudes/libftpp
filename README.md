@@ -555,304 +555,90 @@ If our GameManager class had a public constructor, any random developer could ju
 
 ## The Finite State Machine
 
-This is a fantastic pattern to tackle next! The Finite State Machine (often just called an FSM) is arguably the absolute backbone of video game AI and logic.
+Also called the State Pattern. It is one of the original 23 "Gang of Four" design patterns. It is used in almost every video game character controller.  
 
-Looking at the requirements in **image_b20838.jpg**, we are building a templated `StateMachine` that completely controls the behavior of an object based on what "state" it is currently in.
+>The state pattern is a behavioral software design pattern that allows an object to alter its behavior when its internal state changes. This pattern is close to the concept of finite-state machines. The state pattern can be interpreted as a strategy pattern, which is able to switch a strategy through invocations of methods defined in the pattern's interface. The state pattern is used in computer programming to encapsulate varying behavior for the same object, based on its internal state. This can be a cleaner way for an object to change its behavior at runtime without resorting to conditional statements and thus improve maintainability. - wiki
 
-### The Concept: The Enemy Brain
+We are building a templated `StateMachine` that completely controls the behavior of an object based on what "state" it is currently in.  
 
-To understand what this class does, imagine you are coding an Enemy NPC in a game. The enemy usually has three modes (states):
+Imagine you are coding an Enemy NPC in a game. The enemy usually has three modes (states):
 
 1. **Idle:** Standing still, doing nothing.
 2. **Chase:** Running toward the player.
 3. **Attack:** Swinging a sword at the player.
 
-Instead of writing a massive, messy `if/else` block in your game loop (`if enemy is close, chase; if enemy is very close, attack`), a State Machine isolates these behaviors. An enemy is only ever in exactly *one* state at a time, and it only runs the code specific to that state.
+Instead of writing a messy `if/else` block in your game loop (`if enemy is close, chase; if enemy is very close, attack`), a State Machine isolates these behaviors. An enemy is only ever in exactly *one* state at a time, and it only runs the code specific to that state.
 
----
+### The Methods
 
-### Decoding the Methods
+- **`addState(const TState& state)`**
+This is where we register the states of your machine.  
+- **`addAction(const TState& state, const std::function<void()>& lambda)`**
+This defines what the machine does *while* it is in a state. For example, we map the `CHASE` state to a lambda that contains the pathfinding logic.
+- **`update()`**
+This is possibly called every frame of the game. It checks the *current* state, finds the lambda we registered with `addAction`, and executes it. (if there is no action registered for the current state, we **throw an exception!**)
+- **`addTransition(const TState& startState, const TState& finalState, const std::function<void()>& lambda)`**
+This is for the *in-between* moments. When an enemy goes from `IDLE` to `CHASE`, you might want them to play a sound. we register a lambda specifically for the `(IDLE -> CHASE)` transition.
+- **`transitionTo(const TState& state)`**
+This triggers the state change. If the enemy is in `IDLE`, and we call `transitionTo(CHASE)`, the machine looks for the transition lambda, executes it and then changes the current internal state to `CHASE`. (if this transition isn't set up, we **throw an exception!**)
 
-Let's translate the methods from your subject image into how they apply to our Enemy NPC:
+On wiki there is the classic, textbook UML representation of the State Pattern:
 
-* **`addState(const TState& state)`**
-This is where you register the vocabulary of your machine. You are telling it: *"Hey, IDLE, CHASE, and ATTACK are the only legal states that exist."*
-* **`addAction(const TState& state, const std::function<void()>& lambda)`**
-This defines what the machine does *while* it is in a state. For example, you map the `CHASE` state to a lambda that contains the pathfinding logic.
-* **`update()`**
-This is called every single frame of your game. It checks the *current* state, finds the lambda you registered with `addAction`, and executes it. (The hint explicitly says: if there is no action registered for the current state, **throw an exception!**)
-* **`addTransition(const TState& startState, const TState& finalState, const std::function<void()>& lambda)`**
-This is for the *in-between* moments. When an enemy goes from `IDLE` to `CHASE`, you might want them to play an "Aggro Roar" sound. You register a lambda specifically for the `(IDLE -> CHASE)` transition.
-* **`transitionTo(const TState& state)`**
-This triggers the state change. If the enemy is in `IDLE`, and you call `transitionTo(CHASE)`, the machine looks for the transition lambda, executes the "Aggro Roar," and then changes the current internal state to `CHASE`. (Again, the hint says: if this transition isn't set up, **throw an exception!**)
+![state](images/statemachine.jpg)
 
----
+#### Context (The Top Left Box)**
 
-### The Architecture Challenge
+- **What it is:** This is the `Player` class.
+- **The Diamond Line:** The diamond line connecting `Context` to `State` means **"Has-A"** (Aggregation/Composition). It tells us that the Context physically holds a pointer or reference to a `State` object inside it.
+- **The Note (Bottom Left):** The little dog-eared paper is a code comment. It shows exactly what happens inside `Context::request()`. Instead of doing the work itself, it delegates the work by calling `state.handle()`.
 
-Because this is templated (`template <typename TState>`), all of this will go into `state_machine.hpp`.
+#### State (The Top Right Box)**
 
-To make this work, we need to figure out how to internally store all these registered states, actions, and transitions. We know from the Observer pattern that a dictionary (`std::map`) is perfect for mapping a single `TState` to an action lambda.
+- **What it is:** This is your abstract interface (e.g., `IState`). Notice the name is often written in *italics* in UML to denote that it is an abstract class or interface.
+- It defines the blueprint (`+handle()`) that all states must follow.
 
-However, mapping the *transitions* is a bit trickier because a transition is defined by **two** states (the `startState` and the `finalState`).
+#### ConcreteState A & B (The Bottom Boxes)**
 
+- **What they are:** These are your specific implementations (e.g., `IdleState` and `JumpState`).
+- **The Open Triangle:** The dashed line with the empty triangle pointing up to `State` means **"Is-A"** (Inheritance/Realization). It tells the compiler that `ConcreteStateA` implements the `State` interface.
+- They provide the actual, unique code for `+handle()`.
 
+This diagram is the visual blueprint for **Delegation**. The `Context` doesn't know *how* to handle the request; it just knows it holds a `State` (the diamond) and trusts that the `State` will know what to do (the note).
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## iostream - thread safe
-
-
-It is completely normal that `iostream` feels like a bit of a black box. In C++, we get so used to just typing `std::cout <<` that we rarely stop to ask what it is actually doing behind the scenes!
-
-Here is the exact breakdown of what `iostream` is, whether we cloned it, and how our custom code actually works.
-
-### What is `iostream` anyway?
+# iostream
 
 In C++, **iostream** stands for **Input/Output Stream**.
 
-Think of a "stream" literally like a flowing river of characters.
+## Thread safe iostream
 
-* **`std::cout` (Character Output):** This is a river flowing *out* of your program onto the console screen.
-* **`std::cin` (Character Input):** This is a river flowing *into* your program from the user's keyboard.
+We built a **Wrapper**. We created a class that *looks* and *acts* exactly like `std::cout`. It intercepts the data, organizes it, adds a prefix, and then safely hands it over to `std::cout`.
 
-When you type `std::cout << "Hello"`, you are taking the word "Hello" and throwing it into the output river.
+- The Buffer (`std::ostringstream _buffer`)**
+Because we have multiple threads competing to print, every thread gets an `ostringstream` (Output String Stream).
 
-### Did we build a clone?
+- The Standard Overload (`operator<<(const T& value)`)**
+When a thread types `threadSafeCout << "Hello"`, this function grabs "Hello" and shoves it into the thread's private waiting room (`_buffer`). It does **not** print to the screen yet, and it does **not** lock the console. It just gathers the data.
 
-The subject says: *"provide an equivalent to std::cout so there's no need to create a custom iostream."*
+- The Trigger Overload (`operator<<(std::ostream& (*manip)(std::ostream&))`)**
+It has a very specific job: it catches **Manipulators**, the most famous of which is `std::endl`, which isn't a string; it is actually a function that means "End the line and flush the stream."
+When our class sees `std::endl`, it grabs the global lock (`std::mutex`), prints the thread's prefix, dumps the entire contents of the `_buffer` to the `std::cout` all at once, applies the `std::endl`, and then unlocks.
 
-We did not rewrite the entire C++ standard library from scratch (that would take thousands of lines of code!). Instead, we built a **Wrapper**. We created a class that *looks* and *acts* exactly like `std::cout`, so a programmer can use it without learning anything new.
+- The `thread_local` Keyword**
+By adding `thread_local`, every time a new thread is spawned, we silently create a brand new, copy of `threadSafeCout` just for them.
 
-We essentially built a filter that sits *on top* of the real `std::cout`. It intercepts the data, organizes it, adds a prefix, and then safely hands it over to the real `std::cout`.
+- The `static std::mutex**`
+A mutex (Mutual Exclusion). Because we made it `static`, it means that even if `thread_local` creates 100 different copies of our `ThreadSafeIOStream` object, they all share this one mutual lock.
 
----
-
-### How our code works, piece by piece
-
-Here is exactly how our custom wrapper intercepts and manages the stream.
-
-**1. The Buffer (`std::ostringstream _buffer`)**
-
-* Normally, when you throw words into `std::cout`, they go straight to the screen.
-* Because we have multiple threads competing to print, we can't allow that. Instead, every thread gets an `ostringstream` (Output String Stream). Think of this as a private **waiting room**. Everything the thread wants to print goes into this waiting room first, safely hidden from the other threads.
-
-**2. The Standard Overload (`operator<<(const T& value)`)**
-
-* This is the function that intercepts normal data (like integers, strings, or floats).
-* When a thread types `threadSafeCout << "Hello"`, this function grabs "Hello" and shoves it into the thread's private waiting room (`_buffer`).
-* It does **not** print to the screen yet, and it does **not** lock the console. It just gathers the data.
-
-**3. The Trigger Overload (`operator<<(std::ostream& (*manip)(std::ostream&))`)**
-
-* This piece looks terrifying, but it has a very specific job: it catches **Manipulators**, the most famous of which is `std::endl`.
-* `std::endl` isn't a string; it is actually a function that means "End the line and flush the stream."
-* When our class sees `std::endl`, it treats it as the trigger to finally print. It grabs the global lock (`std::mutex`), prints the thread's prefix, dumps the entire contents of the waiting room (`_buffer`) to the real `std::cout` all at once, applies the `std::endl`, and then unlocks.
-
-**4. The `thread_local` Keyword**
-
-* This is the magic that keeps everything separate. If we just created a normal global `ThreadSafeIOStream threadSafeCout;`, all the threads would try to shove their words into the exact same waiting room, causing a massive mess.
-* By adding `thread_local`, we tell the C++ compiler: *"Every time a new thread is spawned, silently create a brand new, invisible copy of `threadSafeCout` just for them."*
-
-**5. The `static std::mutex**`
-
-* A mutex (Mutual Exclusion) is like a "Talking Stick" in a classroom. Whoever holds the stick is allowed to talk (print to the screen). Everyone else must wait in silence.
-* Because we made it `static`, it means that even if `thread_local` creates 100 different copies of our `ThreadSafeIOStream` object, they all share this **one single talking stick**.
-
-## Q :in C when I use mutex I need to lock/unlock. I do not see the unlock here?
-You have a fantastic eye! Coming from C, you are completely right to be suspicious. In C (using `pthread`), if you `pthread_mutex_lock()` and forget to `pthread_mutex_unlock()`, your program will freeze forever in a deadlock.
-
-In the C++ code we wrote, there is no `unlock()` because we are using one of the most powerful features of C++: **RAII** (Resource Acquisition Is Initialization), specifically through a tool called `std::lock_guard`.
-
-Here is exactly how it replaces the manual C-style locking.
-
-### The Magic of `std::lock_guard`
-
-When you look at this line in our code:
-
-```cpp
-std::lock_guard<std::mutex> lock(_io_mutex);
-
-```
-
-You are not just calling a function; you are creating a temporary local object named `lock`.
-
-**1. The Constructor (The Lock)**
-The moment that `lock` object is created, its constructor automatically grabs the `_io_mutex` and locks it. This is exactly the same as calling `pthread_mutex_lock()`.
-
-**2. The Destructor (The Unlock)**
-In C++, whenever a local object goes "out of scope" (meaning the function it was created in finishes and hits the closing bracket `}`), the object is destroyed.
-When the `lock` object is destroyed, its destructor automatically calls `unlock()` on the mutex.
-
-### Why C++ does it this way (The Safety Net)
-
-Imagine you have a function that locks a mutex, does some math, and then unlocks it.
-
-**The C Way:**
-
-```c
-pthread_mutex_lock(&my_mutex);
-if (math_fails) {
-    // DANGER! If we return here, we forgot to unlock! Deadlock!
-    return -1; 
-}
-pthread_mutex_unlock(&my_mutex);
-
-```
-
-**The C++ Way:**
-
-```cpp
-void doMath() {
-    std::lock_guard<std::mutex> lock(my_mutex); // Locked here
-    
-    if (math_fails) {
-        throw std::runtime_error("Math failed"); 
-        // We threw an error and left the function early, BUT the 'lock' 
-        // object is destroyed as we leave, so it automatically unlocks!
-    }
-} // 'lock' is destroyed here, automatically unlocking.
-
-```
-
-By tying the lock to the lifespan of an object, C++ absolutely guarantees that the mutex will *always* be unlocked, even if your code crashes, throws an exception, or returns early. It completely removes human error from the equation!
-
-## is lockguard a templsate
-You have a fantastic eye for C++ syntax! Yes, the angle brackets `< >` mean `std::lock_guard` is a template, which absolutely means it was designed to lock other things besides a standard `std::mutex`.
-
-`std::lock_guard` is completely blind to what class you actually give it. It only has one strict rule: **Whatever type you put inside those angle brackets must have a `lock()` method and an `unlock()` method.**
-
-Here are the other things you will commonly see `std::lock_guard` locking in C++:
-
-### 1. Other Standard Library Mutexes
+In C (using `pthread`), if I use `pthread_mutex_lock()` and forget to `pthread_mutex_unlock()`, my program will freeze forever in a deadlock. In our C++ code, there is no `unlock()` because we are using a tool called `std::lock_guard` and whenever it goes out of scope, its destructor automatically calls `unlock()` on the mutex.
 
 C++ provides several specialized mutexes for different scenarios, and `lock_guard` works with all of them:
 
-* **`std::recursive_mutex`:** Normally, if a thread locks a mutex and then accidentally tries to lock it *again* (like in a recursive function), the program deadlocks. A recursive mutex allows the same thread to lock it multiple times safely.
-* **`std::timed_mutex`:** A mutex that allows you to specify a timeout. If it can't get the lock within 5 seconds, it gives up instead of waiting forever.
-* **`std::shared_mutex` (C++17):** Used for "Read/Write" locks, where you might want multiple threads to be able to read data simultaneously, but only one thread to write.
-
-### 2. Your Own Custom Classes
-
-Because it is a template, you can actually use `std::lock_guard` on a completely custom class that you write yourself, as long as you provide the required methods!
-
-Here is an example of how you could trick `std::lock_guard` into managing a custom class:
-
-```cpp
-#include <iostream>
-#include <mutex>
-
-// A custom class that is NOT a real mutex, but acts like one
-class DummyLock {
-public:
-    void lock() {
-        std::cout << "Dummy is locking!\n";
-    }
-    
-    void unlock() {
-        std::cout << "Dummy is unlocking!\n";
-    }
-};
-
-void testFunction() {
-    DummyLock myDummy;
-    
-    // std::lock_guard happily accepts our custom class!
-    std::lock_guard<DummyLock> guard(myDummy); 
-    
-    std::cout << "Doing some work...\n";
-} // guard is destroyed here, and automatically calls myDummy.unlock()
-
-```
-
-When you understand that `std::lock_guard` is just a template that automatically calls `lock()` when it is born and `unlock()` when it dies, it takes all the mystery out of it!
-
-## the prompt?
-Ah, the "testing input prompt" refers to the final part of our `main.cpp` file where we test the custom `prompt()` function required by your subject!
-
-Let's break down exactly what that part of the code is doing and why it exists.
-
-### The Problem it Solves
-
-Normally, if you want to ask a user a question in C++, you do this:
-
-```cpp
-std::cout << "Enter your age: ";
-std::cin >> userAge;
-
-```
-
-But in a multithreaded program, this is incredibly dangerous! If you print "Enter your age: ", but before the user can type their answer, Thread 2 suddenly prints `"Physics task finished!"`, the console gets completely scrambled.
-
-To fix this, your subject asked you to build a single function that handles **both** the printing of the question and the reading of the answer under one single, unbreakable lock.
-
-### How we built it in `thread_safe_iostream.hpp`
-
-Here is the function we wrote:
-
-```cpp
-template<typename T>
-void prompt(const std::string& question, T& dest) {
-    // 1. Lock the console so NO OTHER THREAD can interrupt us!
-    std::lock_guard<std::mutex> lock(_io_mutex);
-    
-    // 2. Print our prefix and the question
-    std::cout << _prefix << question;
-    
-    // 3. Wait for the user to type their answer and hit Enter
-    std::cin >> dest;
-    
-} // 4. The lock is destroyed here, and the console is finally freed for other threads.
-
-```
-
-*Note: Notice how `T& dest` has an ampersand (`&`)? That means we are passing the variable by **reference**. Instead of giving the function a copy of the variable, we are handing it the actual memory address so `std::cin` can inject the user's typed answer directly into it.*
-
-### How we tested it in `main.cpp`
-
-At the very end of our `main.cpp`, after all the worker threads finish, we run this code:
-
-```cpp
-// 1. Change the prefix so we know it's the main program talking
-threadSafeCout.setPrefix("[Main Thread] ");
-
-// 2. Create an empty integer to hold the user's answer
-int userAge = 0;
-    
-// 3. Call our custom function! 
-threadSafeCout.prompt("Enter your age to exit: ", userAge);
-    
-// 4. Prove that it worked by printing the variable
-threadSafeCout << "Test complete. User age entered: " << userAge << std::endl;
-
-```
-
-### What you see on the screen
-
-When the code hits that `prompt` line, the terminal will literally freeze and display:
-`[Main Thread] Enter your age to exit: `
-
-The cursor will blink there, waiting. Because of our `lock_guard`, if any other thread were still running and tried to print something, it would be forced to wait silently in the background. Once you type a number (like `42`) and press Enter, the program stores `42` into `userAge`, releases the lock, and prints the final confirmation line!
+- **`std::recursive_mutex`:** Normally, if a thread locks a mutex and then accidentally tries to lock it *again* (like in a recursive function), the program deadlocks. A recursive mutex allows the same thread to lock it multiple times safely.
+- **`std::timed_mutex`:** A mutex that allows you to specify a timeout. If it can't get the lock within 5 seconds, it gives up instead of waiting forever.
+- **`std::shared_mutex` (C++17):** Used for "Read/Write" locks, where you might want multiple threads to be able to read data simultaneously, but only one thread to write.
 
 ## Threads
+
 we are building a wrapper around C++'s standard std::thread. At first glance, it might seem silly to build a wrapper for something that already exists, but this subject introduces a few brilliant architectural twists.
 
 Here are the three main conceptual challenges we need to solve based on the subject image.
@@ -2405,6 +2191,7 @@ IVector2<int> vec4{}; // Best practice!
 [https://en.wikipedia.org/wiki/Object_pool_pattern](https://en.wikipedia.org/wiki/Object_pool_pattern)  
 [https://en.wikipedia.org/wiki/Data_buffer](https://en.wikipedia.org/wiki/Data_buffer)  
 [https://en.wikipedia.org/wiki/Observer_pattern](https://en.wikipedia.org/wiki/Observer_pattern)  
+[https://en.wikipedia.org/wiki/State_pattern](https://en.wikipedia.org/wiki/State_pattern)  
 [https://en.wikipedia.org/wiki/Memento_pattern](https://en.wikipedia.org/wiki/Memento_pattern)  
 [https://en.wikipedia.org/wiki/Command_pattern](https://en.wikipedia.org/wiki/Command_pattern)  
 [https://en.wikipedia.org/wiki/State_pattern](https://en.wikipedia.org/wiki/State_pattern)  

@@ -4,8 +4,9 @@
 #include <map>
 #include <set>
 #include <stdexcept>
-#include <utility>
+#include <utility> // to get access to std::pair.
 
+// if using a Class as TState needs to implement the `<` operator
 template <typename TState> class StateMachine {
 
 private:
@@ -56,7 +57,6 @@ public:
       throw std::runtime_error("StateMachine has no states initialized!");
     }
     auto it = _actions.find(_currentState);
-    // Subject Hint: If an update isn't set up, throw an exception!
     if (it == _actions.end()) {
       throw std::invalid_argument(
           "No action registered for the current state!");
