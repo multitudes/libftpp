@@ -121,7 +121,7 @@ myObject.operator->()->printPosition();
 
 This technique is exactly how standard library smart pointers (like `std::unique_ptr` and `std::shared_ptr`) work under the hood.
 
-### Why use `explicit` for `operator bool()`
+### Using `explicit` for `operator bool()`
 
 In C++, compilers love to automatically convert types (called **implicit conversion**) to try and make the code compile.
 
@@ -150,7 +150,7 @@ We are telling the compiler: *"You are only allowed to convert this to a boolean
 
 The requirements ask for "storing objects in byte format" and "Use C++ stream operators", it is asking me to build a class that acts like std::cout or std::cin, but instead of printing text to a screen, it converts variables into raw binary bytes and pushes them into a vector.
 
-### returning references for chaining
+### Returning references for chaining
 
 This operator overload returns a reference. This is perfectly valid because we return a reference to the object which exists already. We return a reference to the object so that we can do something called 'Operator Chaining'.  
 
@@ -272,7 +272,7 @@ You are returning a reference (`&`) to our internal `_buffer`. Returning by refe
 myBuffer.getBuffer().clear(); 
 ```
 
-## Serializing strings and other types
+### Serializing strings and other types
 
 I had to do an overload for strings because they are not 'trivially copyiable' because they contain pointer references to memory. At its core, a standard string is essentially a class holding three variables:
 
@@ -384,50 +384,37 @@ In the classic UML diagram, there are three actors.
 - The Memento (Wikipedia): This is the locked box containing the saved data. In my Code: This is the Snapshot (DataBuffer).  
 - The Caretaker (Wikipedia): This is the manager that holds onto the saves. In my Code: This is the main() function or whatever game manager holds the `std::vector<Snapshot>` save slots.
 
-## The Observer
+## The Observer Pattern
 
-The Problem: Tightly Connected Code
-Imagine you are writing a game. You have a Player. When the player levels up, three things need to happen:
-The UI needs to flash "LEVEL UP!".
-The Audio system needs to play a fanfare sound.
-The Network system needs to save the new level to the cloud.
-If you write this normally, your Player class has to know about the UI, the Audio, and the Network. The Player code looks like this:
+The official definition (1994):
+> In software design and software engineering, the observer pattern is a software design pattern in which an object, called the subject (also known as event source or event stream), maintains a list of its dependents, called observers (also known as event sinks), and automatically notifies them of any state changes, typically by calling one of their methods. The subject knows its observers through a standardized interface and manages the subscription list directly. - wiki
 
-```C++
-// The bad way: The Player knows everything
-void Player::levelUp() {
-    this->level++;
-    myUI.flashMessage("LEVEL UP!");
-    myAudio.play("fanfare.wav");
-    myNetwork.save(this->level);
-}
-```
+However, in this project we implemented a better version of this pattern by using `std::map`, variadic templates, and `std::function` and the power of lambdas.
+This is how modern game engines (like Unity's Event System or Unreal's Delegates) handle observers today. The Wikipedia diagram is a great history lesson...
+Our code is actually a Publish/Subscribe (Pub/Sub) Event Bus, while the diagram in wiki is the strict, old-school 1994 "Gang of Four" Observer Pattern.
 
-Why is this bad? Because now your Player is permanently glued to those other systems. If you want to remove the UI for a server-side version of the game, the Player class breaks. The Player shouldn't care about audio or networks; it should only care about being a player!
+### The Classic UML Diagram (The 1994 Way)
 
-The Solution: The Observer Pattern (The Broadcaster and the Listeners)
-The Observer pattern fixes this by introducing a middleman. It splits the world into two groups:
-The Broadcaster (Subject): The thing that says, "Hey, something just happened!"
-The Listeners (Observers): The things waiting for that specific thing to happen.
-Instead of the Player talking to the UI, Audio, and Network directly, the Player just holds a megaphone and yells into the void: "EVENT: Player Leveled Up!"
+In the classic OOP Observer pattern shown in the diagram, there is **no middleman**. The objects talk directly to each other using strict Inheritance Interfaces.
 
-That is where your Observer class (from the subject) comes in. It acts as the megaphone.
-Subscribing: Before the game even starts, the UI, Audio, and Network go to the megaphone and say: "Hey, if you ever hear someone yell 'Player Leveled Up', please tap me on the shoulder and run my specific code."
-Notifying: When the player levels up, it just tells the megaphone. The megaphone then looks at its clipboard, sees UI, Audio, and Network on the list for that event, and taps all three of them on the shoulder.
-Now, the Player doesn't know the UI or Audio even exist! It just yells into the megaphone and trusts that whoever cares is listening.
-A dictionary (in C++, a `std::map` or `std::unordered_map`) where the key is the `TEvent` and the value is a `std::vector` of lambdas is exactly the perfect way to build this.
+- **The Subject (Left Box):** This is the object whose state changes (e.g., the `Player`). It contains a list of pointers to `Observer` objects. It has an `attach()` method to add an observer to its list, and a `notify()` method that loops through that list.
+- **The Observer (Right Box):** This is a strict Interface class. Anything that wants to listen to the Player (like the `UI` or `Audio` systems) **must** inherit from this class and implement a specific `update()` function.
+- **The Sequence (Right Side Diagram):** When `Subject1` changes state, it calls `notify()`. This loops through its list of attached observers and calls `update()` on them. Then, the observers have to reach *back* into `Subject1` using `getState()` to figure out what actually happened.
 
-### Who is Who?
+The `UI` has to hold a pointer to the `Player` class, and the `Player` class has to hold pointers to the `UI` class. They are highly dependent on each other (Tight Coupling).
 
-To keep it straight, always think of it in two phases: **Setup (Subscribing)** and **Action (Notifying)**.
+Here is how our code maps to the old UML:
 
-* **The Megaphone (The Observer class):** Just a middleman. It holds that dictionary you just described.
-* **The Subscribers (UI, Audio, Network):** These are the systems that care about the event. They add their lambdas to the dictionary during the setup phase.
-* **The Broadcaster (The Player):** This is the object where the action actually happens. It doesn't know who is in the dictionary; it just tells the megaphone to trigger it.
+- **UML `Subject::attach()**` $\rightarrow$ our `subscribe(event, lambda)`
+- **UML `Subject::notify()**` $\rightarrow$ our `notify(event)`
+- **UML `Observer::update()**` $\rightarrow$ our `std::function` (Lambdas)
 
-### The "Level Up" Example (Done Right)
+1. **Zero Coupling (No Pointers):** In our code, the `Player` (Subject) doesn't know the `UI` exists. The `UI` doesn't know the `Player` exists. They both only talk to the central `Observer` dictionary.
+2. **No Inheritance Bloat:** In the UML, we have to create massive inheritance trees (`Subject1`, `Observer1`, `Observer2`). In our code, anyone can just pass a lambda function. No base classes or virtual functions required!
 
-Let's look at exactly how your UI, Audio, and Network subscribe to the same event, and how the player triggers all three without ever talking to them directly.
+### An Example
+
+Let's look at how the UI, Audio, and Network subscribe to the same event, and how the player triggers all three without ever talking to them directly.
 
 ```cpp
 // 1. We define our event label
@@ -435,12 +422,8 @@ enum GameEvent {
     PLAYER_LEVEL_UP
 };
 
-// We have our central observer (The Megaphone)
+// We have our central observer
 Observer<GameEvent> globalObserver; 
-
-// =========================================================================
-// PHASE 1: SETUP (The Subscribers register themselves)
-// =========================================================================
 
 // The UI System subscribes its own lambda to the Level Up event
 globalObserver.subscribe(PLAYER_LEVEL_UP, []() {
@@ -457,61 +440,33 @@ globalObserver.subscribe(PLAYER_LEVEL_UP, []() {
     std::cout << "[Network System] Saving new level to the cloud.\n";
 });
 
-// At this point, the dictionary inside globalObserver looks like this:
-// PLAYER_LEVEL_UP -> [ UI_Lambda, Audio_Lambda, Network_Lambda ]
-
-
-// =========================================================================
-// PHASE 2: ACTION (The Broadcaster triggers the event)
-// =========================================================================
+// The player just needs to call one function on the globalObserver, notify, 
+// which is perfectly decoupled from the other classes
 class Player {
 public:
     void levelUp() {
-        // ... player level increases ...
-        
-        // The Player just yells into the megaphone. 
-        // It has NO IDEA that UI, Audio, and Network are listening.
         globalObserver.notify(PLAYER_LEVEL_UP);
     }
 };
-
 ```
 
-When `myPlayer.levelUp()` calls that `notify` function, the `Observer` will look up `PLAYER_LEVEL_UP` in its dictionary, find the array of 3 lambdas, and execute them one by one. The UI flashes, the audio plays, and the network saves, all from one single trigger!
+When `myPlayer.levelUp()` calls that `notify` function, the `Observer` will look up `PLAYER_LEVEL_UP` in its dictionary, find the array of 3 lambdas, and execute them one by one.  
 
-Does mapping it out this way make the distinct roles of the systems clearer? And since you perfectly guessed the dictionary structure, are you ready to write the actual `observer.hpp` class using `std::map` and `std::vector`?
+### Potential hidden memory leak in maps and how to avoid them
 
+There is a difference between:
 
-## Question about find in maps
+```cpp
+auto it = _subscribers.find(event);
+// could be just ?
+auto it = _subscribers[event];
+```
 
-this one auto it = _subscribers.find(event) could be just auto it = _subscribers[event] ? or it is unsafe?
+`_subscribers[event]` looks much cleaner and shorter, but in this specific case, creates a hidden memory leak,
+because in C++, the square brackets `[]` on a map are designed to guarantee that you get a valid item back. The map looks for the event. If the event does not exist, the map will insert a new, empty `std::vector` into the dictionary and return that.
 
-You are right that `_subscribers[event]` looks much cleaner and shorter! But in this specific case, **it is dangerous and creates a hidden memory leak.**
-
-Here is exactly what happens behind the scenes with C++ dictionaries (`std::map`).
-
-### The Secret Trap of `operator[]`
-
-In C++, the square brackets `[]` on a map do not just *read* data. They are designed to guarantee that you get a valid item back.
-
-If you write `_subscribers[event]`, the map looks for the event. If the event **does not exist**, the map quietly says: *"Oh, you wanted this event? Let me create it for you right now!"* It will instantly insert a brand new, empty `std::vector` into the dictionary and return that to you.
-
-### Why this destroys a game loop
-
-Imagine you have an enemy that calls `events.notify(PLAYER_FOOTSTEP)` every single frame to check if it should chase the player. But let's say nothing has actually subscribed to that event yet.
-
-* **If you use `find()`:** The map looks, says "not found," and does nothing. Zero cost.
-* **If you use `[]`:** Every single frame, the map tries to find `PLAYER_FOOTSTEP`. When it doesn't find it, it creates a new empty array. The next frame, an enemy triggers `BIRD_CHIRP`. The map creates another empty array.
-
-Over a few minutes, your dictionary will be filled with hundreds of useless, empty arrays taking up RAM, just because someone *checked* to see if they existed!
-
-### The `const` Connection
-
-Remember our very first conversation about `const` correctness?
-
-Because `[]` is capable of modifying the map (by inserting new items), the C++ compiler strictly forbids you from using `[]` inside any function marked `const`.
-
-If you wanted to make your `notify` method perfectly secure (since notifying shouldn't change the list of subscribers), you would write it like this:
+Using `find()` the map looks, does nothing. With `[]` the map creates a new empty array taking up RAM.
+So to make the `notify` method perfectly secure (since notifying shouldn't change the list of subscribers), we would write it with `find()` which is guaranteed to not change the map:
 
 ```cpp
 // The 'const' here promises we won't change the dictionary
@@ -519,8 +474,8 @@ void notify(const TEvent& event) const {
     // This works perfectly because find() just looks.
     auto it = _subscribers.find(event); 
     
-    // If you typed _subscribers[event] here, the compiler would 
-    // instantly throw an error to protect your map!
+    // If we typed _subscribers[event] here, the compiler would 
+    // instantly throw an error because of the const keyword
     
     if (it != _subscribers.end()) {
         for (const auto& lambda : it->second) {
@@ -528,51 +483,22 @@ void notify(const TEvent& event) const {
         }
     }
 }
-
 ```
 
-By using `find()`, you are writing high-performance, defensively protected C++!
+#### The std::pair (First and Second)
 
+When we store something in a std::map, C++ binds them together into a single object called a std::pair.
 
-ou are exactly right! You have perfectly decoded how C++ iterators work with dictionaries.
+When the `find()` function succeeds, it returns an iterator (the it variable) that points directly to that pair.  
+it->first represents the Key (the TEvent, like LEVEL_UP).  
+it->second represents the Value (the std::vector of lambdas).  
 
-Here is the exact breakdown of what is happening under the hood in that specific line of code.
+The syntax `for (const auto &lambda : it->second)` is called a range-based for loop (introduced in C++11), and it is the cleanest way to loop through arrays.  
+`& (Reference)`: This ensures we are looking at the original lambda in the array, rather than making a slow copy of it just for the loop.  
+`const`: It guarantees we won't accidentally overwrite or destroy the lambda while we are trying to execute it.  
 
-The std::pair (First and Second)
-When you store something in a std::map, C++ doesn't just throw the key and the value loosely into memory. It physically binds them together into a single object called a std::pair.
-
-When your find() function succeeds, it returns an iterator (the it variable) that points directly to that pair.
-it->first represents the Key (your TEvent, like LEVEL_UP).
-it->second represents the Value (your std::vector of lambdas).
-Deconstructing the Loop
-The syntax for (const auto &lambda : it->second) is called a range-based for loop (introduced in C++11), and it is the cleanest way to loop through arrays.
-
-Here is what each piece of that line is doing:
-it->second: This is the array (the std::vector) of lambdas that we want to loop through.
-auto: This tells the compiler, "You already know it->second holds std::function<void()> objects, so I'm not going to type all of that out. You figure it out."
-& (Reference): This ensures we are looking at the original lambda in the array, rather than making a slow copy of it just for the loop.
-const: This is our safety lock. It guarantees we won't accidentally overwrite or destroy the lambda while we are trying to execute it.  
-
-## event as structs?
-Yes, absolutely! This is actually a highly advanced and common way to use the Observer pattern in professional game engines. It is often referred to as using **Event Objects**.
-
-Because your `Observer` is templated (`template <typename TEvent>`), C++ doesn't care if `TEvent` is an `int`, an `enum`, a `std::string`, or a custom `struct`. It will accept anything!
-
-However, there is **one major catch** you must handle if you use a `struct` because of how `std::map` works.
-
-### The `std::map` Sorting Rule
-
-A `std::map` is a *sorted* dictionary. It organizes its keys internally like a phone book so it can find things instantly.
-
-* If your key is an `int`, C++ knows that `1` comes before `2`.
-* If your key is a `std::string`, C++ knows to sort it alphabetically.
-* But if your key is a custom `struct`, **C++ has no idea how to sort it.**
-
-If you try to use a plain `struct` as a `TEvent`, the compiler will throw a massive error. You have to teach C++ how to sort your struct by adding an `operator<` (less-than operator).
-
-### How to do it in code
-
-Here is exactly how you would define your struct so that it works perfectly inside your `Observer` dictionary:
+Maps are ordered. If we try to use a plain `struct` as a `TEvent`, the compiler will throw an error. You have to implement a sorting function for the struct by adding an `operator<`.
+ so that it works perfectly inside your `Observer` dictionary:
 
 ```cpp
 #include <string>
@@ -593,111 +519,13 @@ struct PlayerEvent {
         return playerName < other.playerName;
     }
 };
-
 ```
 
-### Why this is incredibly powerful
+However, using `std::unordered_map` with a custom struct is possible but actually needs more code code, not less.  
+We have to provide an `operator==` so the map knows if two events are exactly identical. And custom Hash function.
+`std::map` works with a Binary Tree, a Red-Black Tree behind the scenes.  
 
-If you use this struct as your `TEvent`, you can create hyper-specific subscriptions.
-
-Instead of subscribing to a generic "Level Up", a subscriber can say: *"I only want to be notified if a Level Up happens AND the player's name is Alice."*
-
-```cpp
-Observer<PlayerEvent> globalObserver;
-
-// Create a specific event to listen for
-PlayerEvent targetEvent = {1, "Alice"};
-
-// Subscribe only to Alice's level ups!
-globalObserver.subscribe(targetEvent, []() {
-    std::cout << "Ding! Alice specifically leveled up!\n";
-});
-
-// Triggering the event:
-PlayerEvent currentEvent = {1, "Alice"};
-globalObserver.notify(currentEvent); // This works and triggers the lambda!
-
-PlayerEvent otherEvent = {1, "Bob"};
-globalObserver.notify(otherEvent);   // This does nothing, because no one subscribed to Bob!
-
-```
-
-This perfectly bypasses the problem of needing multiple "megaphones" because the megaphone's dictionary is now smart enough to separate events by player name!
-
-## but then I could use a unsorted map.. 
-You are absolutely right to think of that! In C++, the "unsorted map" is called `std::unordered_map`. Because it doesn't sort the keys, it is technically faster (it has O(1) instant lookups, whereas `std::map` takes a little longer at O(log N)).
-
-However, using `std::unordered_map` with a custom struct actually forces you to write **more** code, not less!
-
-Here is why you can't just drop a custom struct into an unordered map for free.
-
-### The Hash Table Trap
-
-`std::unordered_map` is built on a Hash Table. It works by taking your key, doing some math on it (hashing it), and turning it into a giant random number to use as an index.
-
-C++ knows how to hash an `int` or a `std::string`. But if you hand it a custom `PlayerEvent` struct, the compiler has no idea how to do math on it.
-
-To use a `std::unordered_map` with your struct, you have to provide **two** things instead of just one:
-
-1. An `operator==` so the map knows if two events are exactly identical.
-2. A custom Hash Function to teach C++ how to turn your struct into a number.
-
-### What the code looks like
-
-If you wanted to use `std::unordered_map`, here is the extra boilerplate you would be forced to write:
-
-```cpp
-#include <string>
-#include <unordered_map>
-#include <functional> // Needed for std::hash
-
-// 1. The Struct
-struct PlayerEvent {
-    int eventType;
-    std::string playerName;
-
-    // Requirement A: Equality operator
-    bool operator==(const PlayerEvent& other) const {
-        return (eventType == other.eventType && playerName == other.playerName);
-    }
-};
-
-// Requirement B: Custom Hash Function injected into the std namespace
-namespace std {
-    template <>
-    struct hash<PlayerEvent> {
-        size_t operator()(const PlayerEvent& e) const {
-            // Combine the hashes of the int and the string
-            size_t h1 = std::hash<int>()(e.eventType);
-            size_t h2 = std::hash<std::string>()(e.playerName);
-            return h1 ^ (h2 << 1); // Bitwise XOR and shift to mix them
-        }
-    };
-}
-
-```
-
-### Which one should you choose?
-
-* **Use `std::map` (The Tree):** If you want less boilerplate code. You only have to write a simple `operator<` inside the struct.
-* **Use `std::unordered_map` (The Hash):** If you are building an ultra-high-performance engine with millions of events per second, and you are willing to write the custom hash function to get that instant O(1) lookup speed.
-
-For standard game events and 42 school projects, `std::map` is usually preferred simply because it is much cleaner to write and read!
-
-## but map doesn't ask the keys to be hashable?
-
-You are exactly right (and I am guessing autocorrect struck there and you meant **"hashable"**!).
-
-Yes, `std::map` absolutely does **not** need the keys to be hashable.
-
-Here is why `std::map` is so much simpler:
-
-* **`std::unordered_map` (The Hash Table):** Works like a filing cabinet with numbered folders. It *must* do math on your key (hash it) to figure out exactly which folder number to put it in.
-* **`std::map` (The Binary Tree):** Works like a sorting flowchart (specifically, a Red-Black Tree). It just looks at a key and asks one simple question: *"Are you smaller than the key I am currently looking at?"* If yes, it puts it on the left branch. If no, it puts it on the right branch.
-
-Because `std::map` only ever navigates by asking *"Are you smaller?"*, the only thing it ever demands from you is that single `operator<`. It completely ignores hashing!
-
-This is why `std::map` is usually the go-to choice for custom struct keys—it saves you from writing all that extra math.
+See also the Publish–subscribe pattern which is more loosely coupled: [https://en.wikipedia.org/wiki/Publish–subscribe_pattern](https://en.wikipedia.org/wiki/Publish–subscribe_pattern)
 
 ## Singleton
 
@@ -2584,8 +2412,8 @@ IVector2<int> vec4{}; // Best practice!
 [https://en.wikipedia.org/wiki/Design_Patterns](https://en.wikipedia.org/wiki/Design_Patterns)  
 [https://en.wikipedia.org/wiki/Object_pool_pattern](https://en.wikipedia.org/wiki/Object_pool_pattern)  
 [https://en.wikipedia.org/wiki/Data_buffer](https://en.wikipedia.org/wiki/Data_buffer)  
+[https://en.wikipedia.org/wiki/Observer_pattern](https://en.wikipedia.org/wiki/Observer_pattern)  
 [https://en.wikipedia.org/wiki/Memento_pattern](https://en.wikipedia.org/wiki/Memento_pattern)  
 [https://en.wikipedia.org/wiki/Command_pattern](https://en.wikipedia.org/wiki/Command_pattern)  
-[https://en.wikipedia.org/wiki/Observer_pattern](https://en.wikipedia.org/wiki/Observer_pattern)  
 [https://en.wikipedia.org/wiki/State_pattern](https://en.wikipedia.org/wiki/State_pattern)  
 [https://en.wikipedia.org/wiki/Singleton_pattern](https://en.wikipedia.org/wiki/Singleton_pattern)  
