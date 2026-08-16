@@ -1,10 +1,10 @@
-## PerlinNoise2D
+# PerlinNoise2D
 
 Invented by Ken Perlin (originally to generate realistic textures for the 1982 movie *Tron*), Perlin noise is a way to generate natural-looking randomness.
 
 If we use a standard random generator for a 2D image, we get "white noise"—it looks like harsh TV static because every pixel is completely unrelated to its neighbor. Perlin noise fixes this by creating **smooth, continuous randomness**. Instead of static, it looks like clouds, rolling hills, or swirling smoke. If we sample two points very close to each other, their values will be very similar. It is the mathematical backbone of almost all procedural generation in games today, like generating terrain heights in *Minecraft*.
 
-### Implementation Requirements
+## Implementation Requirements
 
 * A method `float sample(float x, float y)` (the coordinates need to be floats so we can sample points *between* the whole-number grid lines).
 * Overload `operator()` for generating noise, meaning we can call our noise object just like a function (e.g., `myNoise(1.2f, 3.5f)`).
@@ -12,7 +12,7 @@ If we use a standard random generator for a 2D image, we get "white noise"—it 
 
 ---
 
-### Overloading the `operator()` (Functors)
+## Overloading the `operator()` (Functors)
 
 By overloading the function call operator `operator()`, we tell the compiler to treat an instance of our class like a function call. This creates a **functor** (or function object).
 
@@ -22,7 +22,6 @@ long long randomNumber = myNoise.operator()(x, y);
 
 ```
 
-**Why bother with Functors?**
 We use functors instead of standard functions (like `generateRandomNumber(x, y)`) because they offer distinct advantages:
 
 * **Statefulness:** A normal function forgets everything once it finishes running. A functor is an object, so it can have member variables and "remember" its internal state—like a seed value or our random generator instance—across multiple calls.
@@ -31,11 +30,11 @@ We use functors instead of standard functions (like `generateRandomNumber(x, y)`
 
 ---
 
-### The Algorithm Step-by-Step
+## The Algorithm Step-by-Step
 
 To calculate the noise value for a specific float coordinate (like $x = 1.2$, $y = 3.5$), the algorithm works in distinct mathematical steps:
 
-#### 1. The Grid (The Graph Paper)
+### 1. The Grid (The Graph Paper)
 
 We imagine the 2D plane as a grid of whole numbers. A floating-point coordinate sits inside a single square cell on that paper. To determine the value at our specific point, we only need the four integer corners of the square it resides in. For $(1.2, 3.5)$, those corners are $(1,3)$, $(2,3)$, $(1,4)$, and $(2,4)$.
 
@@ -58,7 +57,7 @@ IVector2<float> local_coord = orig_point - IVector2<float>(X, Y);
 
 ```
 
-#### 2. The Angles (The Random Arrows)
+### 2. The Angles (The Random Arrows)
 
 For each of those four integer corners, we feed their coordinates into our `Random2DCoordinateGenerator`. Because the generator is deterministic, a specific grid corner will *always* have the exact same random hash.
 
@@ -82,7 +81,7 @@ IVector2<float> bottom_left_gradient(std::cos(bottom_left_angle), std::sin(botto
 
 ```
 
-#### 3. Putting it Together (The Dot Product)
+### 3. Putting it Together (The Dot Product)
 
 Next, we calculate four distance vectors pointing from each of the four corners directly to our local point. We then calculate the **dot product** of those distance vectors and our generated gradient vectors.
 
@@ -95,14 +94,15 @@ float bottom_left_dot = bottom_left_gradient.dot(first_distance_vector);
 
 ```
 
-#### 4. Smooth Interpolation (Fade and Lerp)
+### 4. Smooth Interpolation (Fade and Lerp)
+
 If we just draw straight lines between our random values, the noise will look blocky and jagged (like a 90s video game). Ken Perlin established a **fade function** to smooth out the transition curve of our local coordinates:
 
 $$fade(t) = t^3 \times (t \times (t \times 6 - 15) + 10)$$
 
 We apply this fade function to our local coordinates to get our smooth blending weights, which we call **$u$** and **$v$**:
-*   **$u = fade(local\_coord.x)$**
-*   **$v = fade(local\_coord.y)$**
+- **$u = fade(local\_coord.x)$**
+- **$v = fade(local\_coord.y)$**
 
 Once we have $u$ and $v$, we use Linear Interpolation (**Lerp**) to blend the dot product values. A standard Lerp function takes a weight ($t$) and uses it to blend between two values ($a$ and $b$):
 
@@ -117,3 +117,46 @@ We plug our $u$ and $v$ weights directly into the $t$ parameter of the Lerp func
    `float x2 = lerp(u, upper_left_dot, upper_right_dot);`
 3. Lerp those two resulting values together using $v$ for the weight to get the final smooth noise float:
    `float final_noise = lerp(v, x1, x2);`
+
+### Lambdas are Functors
+
+When we write a lambda expression in modern C++, the compiler does not treat it like a traditional function. Instead, it automatically generates a hidden, anonymous `class` (or `struct`) behind the scenes and overloads the `operator()` for it. A lambda is quite literally just a functor in disguise.
+
+Here is what happens under the hood.
+
+**What we write (The Lambda):**
+
+```cpp
+int multiplier = 5;
+
+auto myLambda = [multiplier](int x) { 
+    return x * multiplier; 
+};
+
+```
+
+**What the compiler actually builds (The Functor):**
+The compiler sees our lambda and instantly writes this class:
+
+```cpp
+class __CompilerGeneratedAnonymousName {
+private:
+    // The captured variable becomes a class member!
+    int multiplier; 
+
+public:
+    // The compiler automatically writes the constructor to handle our captures
+    __CompilerGeneratedAnonymousName(int m) : multiplier(m) {}
+
+    // The body of our lambda becomes the overloaded operator()
+    inline int operator()(int x) const {
+        return x * multiplier;
+    }
+};
+
+// It then instantiates the functor object exactly where we wrote the lambda
+__CompilerGeneratedAnonymousName myLambda(multiplier);
+
+```
+
+This is why lambdas are so powerful and fast. They give us all the benefits of a functor—statefulness (capturing variables as member variables) and high performance (inlined `operator()` calls)—but without making us type out an entire class definition every time we need one. A lambda is simply syntactic sugar for a functor.
