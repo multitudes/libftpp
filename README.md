@@ -2,6 +2,34 @@
 
 This is a school project for 42 focused on exploring advanced C++ concepts. The goal is to build a library of reusable components that can be carried over into future projects. Throughout the project, we implement standard design patterns—like Singleton, Observer, and Command—to better understand how larger software architectures are structured. It also covers multi-threading through the creation of thread-safe data structures, and introduces basic networking by building a simple client and server.
 
+## Getting Started
+
+To test the library and see the components in action, you first need to clone the repository:
+
+```bash
+git clone git@github.com:multitudes/libftpp.git
+cd libftpp
+
+```
+
+To compile the source code and generate the static library archive (`libftpp.a`), simply run:
+
+```bash
+make
+
+```
+
+To compile and run the test suite (which links `main.cpp` and `test.cpp` against the library and automatically executes the binary), run:
+
+```bash
+make test
+
+```
+
+*(Note: You can also use `make clean` to remove the object files, or `make fclean` to completely remove the object files, the test executable, and the `.a` archive.)*
+
+---
+
 ## Data Structures
 
 Here we tackle memory management and data serialization. I built an Object Pool to pre-allocate memory and reuse objects without the heavy performance hit of constantly calling `new` and `delete` at runtime. I also implemented a `DataBuffer` class that acts like a binary stream, using C++ operator overloading to neatly convert variables into raw bytes for storage or network transmission.
