@@ -64,7 +64,9 @@ void pool_test() {
 void databuffer_test() {
   std::cout << "\n\n================================\n";
   std::cout << "============ DATABUFFER ===========\n";
-  std::cout << "=== 1. Creating DataBuffer ===\n";
+  std::cout << "=== Creating DataBuffer ===\n";
+
+  // this is the 42 main test with the TestObject
   DataBuffer myBuffer;
 
   TestObject obj1;

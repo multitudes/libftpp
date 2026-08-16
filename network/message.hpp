@@ -20,7 +20,7 @@ public:
   void setBuffer(const std::vector<uint8_t> &data);
   int type() const;
 
-  // Now, your Message just passes the work down to the DataBuffer!
+  // Message just passes the work down to the DataBuffer
   template <typename T> Message &operator<<(const T &data) {
     _payload << data;
     return *this;
